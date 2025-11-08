@@ -1,101 +1,66 @@
 <script lang="ts">
-  interface TreeNode {
-    id: string;
-    name: string;
-    children?: TreeNode[];
-    value?: string;
-    color?: string;
-    expanded?: boolean;
-  }
+  import { treeState } from "./state.svelte";
+  import type { GroupMeta, TokenMeta } from "./state.svelte";
+  import type { TreeNode } from "./store";
 
-  const tokens: TreeNode[] = [
-    {
-      id: "colors",
-      name: "Colors",
-      expanded: true,
-      children: [
-        {
-          id: "colors-primary",
-          name: "Primary",
-          value: "#3b82f6",
-          color: "#3b82f6",
-        },
-        {
-          id: "colors-error",
-          name: "Error",
-          value: "#ef4444",
-          color: "#ef4444",
-        },
-        {
-          id: "colors-success",
-          name: "Success",
-          value: "#10b981",
-          color: "#10b981",
-        },
-      ],
-    },
-    {
-      id: "typography",
-      name: "Typography",
-      expanded: true,
-      children: [
-        {
-          id: "typography-size",
-          name: "Font Size",
-          value: "16px",
-        },
-        {
-          id: "typography-height",
-          name: "Line Height",
-          value: "1.5",
-        },
-        {
-          id: "typography-weight",
-          name: "Font Weight",
-          value: "500",
-        },
-      ],
-    },
-    {
-      id: "spacing",
-      name: "Spacing",
-      expanded: true,
-      children: [
-        {
-          id: "spacing-sm",
-          name: "Small",
-          value: "8px",
-        },
-        {
-          id: "spacing-md",
-          name: "Medium",
-          value: "16px",
-        },
-        {
-          id: "spacing-lg",
-          name: "Large",
-          value: "24px",
-        },
-      ],
-    },
-  ];
+  const rootNodes = $derived(treeState.getChildren(undefined));
 
-  let expandedNodes = new Set(tokens.map((t) => t.id));
-  let selectedNodeId: string | null = null;
+  let expandedNodes = $state(new Set<string>());
+  let selectedNodeId = $state<string | null>(null);
 
   function toggleNode(nodeId: string) {
-    if (expandedNodes.has(nodeId)) {
-      expandedNodes.delete(nodeId);
+    const newSet = new Set(expandedNodes);
+    if (newSet.has(nodeId)) {
+      newSet.delete(nodeId);
     } else {
-      expandedNodes.add(nodeId);
+      newSet.add(nodeId);
     }
-    expandedNodes = expandedNodes;
+    expandedNodes = newSet;
   }
 
   function selectNode(nodeId: string) {
     selectedNodeId = nodeId;
   }
+
+  function getChildren(nodeId: string): TreeNode<GroupMeta | TokenMeta>[] {
+    return treeState.getChildren(nodeId);
+  }
 </script>
+
+{#snippet treeItem(node: TreeNode<GroupMeta | TokenMeta>, depth: number)}
+  {@const children = getChildren(node.nodeId)}
+  {@const hasChildren = children.length > 0}
+  {@const isExpanded = expandedNodes.has(node.nodeId)}
+  {@const isSelected = selectedNodeId === node.nodeId}
+
+  <div class="tree-node" style="padding-left: {depth * 16}px;">
+    {#if hasChildren}
+      <button
+        class="tree-toggle"
+        onclick={() => toggleNode(node.nodeId)}
+        title={isExpanded ? "Collapse" : "Expand"}
+      >
+        <span class="tree-chevron" class:rotated={isExpanded}> ▶ </span>
+      </button>
+      <span class="tree-folder-icon">📁</span>
+    {:else}
+      <span class="tree-spacer"></span>
+    {/if}
+    <span
+      class="tree-label"
+      class:selected={isSelected}
+      onclick={() => selectNode(node.nodeId)}
+    >
+      {node.meta.name}
+    </span>
+  </div>
+
+  {#if isExpanded && hasChildren}
+    {#each children as child (child.nodeId)}
+      {@render treeItem(child, depth + 1)}
+    {/each}
+  {/if}
+{/snippet}
 
 <div class="container">
   <!-- Toolbar -->
@@ -132,43 +97,8 @@
       </div>
 
       <div class="tokens-list">
-        {#each tokens as node (node.id)}
-          <div class="tree-node">
-            <button
-              class="tree-toggle"
-              on:click={() => toggleNode(node.id)}
-              title={expandedNodes.has(node.id) ? "Collapse" : "Expand"}
-            >
-              <span
-                class="tree-chevron"
-                class:rotated={expandedNodes.has(node.id)}
-              >
-                ▶
-              </span>
-            </button>
-            <span class="tree-folder-icon">📁</span>
-            <span class="tree-label">{node.name}</span>
-          </div>
-
-          {#if expandedNodes.has(node.id) && node.children}
-            {#each node.children as child (child.id)}
-              <div
-                class="tree-item"
-                class:selected={selectedNodeId === child.id}
-                on:click={() => selectNode(child.id)}
-              >
-                <div class="tree-item-indent"></div>
-                {#if child.color}
-                  <div
-                    class="token-preview"
-                    style="background: {child.color};"
-                  ></div>
-                {/if}
-                <span class="tree-item-name">{child.name}</span>
-                <span class="tree-item-value">{child.value}</span>
-              </div>
-            {/each}
-          {/if}
+        {#each rootNodes as node (node.nodeId)}
+          {@render treeItem(node, 0)}
         {/each}
       </div>
     </aside>

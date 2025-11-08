@@ -1,0 +1,691 @@
+{
+  "colors": {
+    "$type": "color",
+    "$description": "Color tokens for the design system",
+    "$extensions": {
+      "com.example/category": {
+        "group": "semantic"
+      },
+      "com.example/wcag": {
+        "minContrast": 4.5
+      }
+    },
+    "primary": {
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0, 0.4, 0.8]
+      },
+      "$description": "Primary brand color",
+      "$extensions": {
+        "com.example/usage": {
+          "contexts": ["buttons", "links", "highlights"],
+          "recommended": true
+        },
+        "com.example/accessibility": {
+          "wcagAA": true,
+          "wcagAAA": true,
+          "colorblindSafe": true
+        }
+      }
+    },
+    "secondary": {
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.8, 0.2, 0.5]
+      },
+      "$extensions": {
+        "com.example/usage": {
+          "contexts": ["secondary actions", "badges"],
+          "recommended": true
+        }
+      }
+    },
+    "surface": {
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [1, 1, 1]
+      },
+      "$description": "Surface background color"
+    },
+    "text": {
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.1, 0.1, 0.1]
+      }
+    },
+    "error": {
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.9, 0.2, 0.2]
+      }
+    },
+    "success": {
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.2, 0.8, 0.4]
+      }
+    },
+    "warning": {
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [1, 0.7, 0.2]
+      }
+    },
+    "transparent": {
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0, 0, 0, 0]
+      },
+      "$description": "Transparent color with alpha channel"
+    }
+  },
+  "spacing": {
+    "$type": "dimension",
+    "$description": "Spacing tokens with pixel units",
+    "$extensions": {
+      "com.example/scale": {
+        "base": 4,
+        "ratio": 2
+      },
+      "com.example/usage": {
+        "system": "8pt grid"
+      }
+    },
+    "xs": {
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      },
+      "$extensions": {
+        "com.example/scale": {
+          "multiplier": 1
+        }
+      }
+    },
+    "sm": {
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      },
+      "$extensions": {
+        "com.example/scale": {
+          "multiplier": 2
+        }
+      }
+    },
+    "md": {
+      "$value": {
+        "value": 16,
+        "unit": "px"
+      }
+    },
+    "lg": {
+      "$value": {
+        "value": 24,
+        "unit": "px"
+      }
+    },
+    "xl": {
+      "$value": {
+        "value": 32,
+        "unit": "px"
+      }
+    }
+  },
+  "spacingRem": {
+    "$type": "dimension",
+    "$description": "Spacing tokens with rem units",
+    "xs": {
+      "$value": {
+        "value": 0.25,
+        "unit": "rem"
+      }
+    },
+    "sm": {
+      "$value": {
+        "value": 0.5,
+        "unit": "rem"
+      }
+    }
+  },
+  "transitions": {
+    "$type": "duration",
+    "$description": "Animation duration tokens",
+    "fast": {
+      "$value": {
+        "value": 100,
+        "unit": "ms"
+      }
+    },
+    "normal": {
+      "$value": {
+        "value": 300,
+        "unit": "ms"
+      }
+    },
+    "slow": {
+      "$value": {
+        "value": 500,
+        "unit": "ms"
+      }
+    },
+    "verySlowInSeconds": {
+      "$value": {
+        "value": 2,
+        "unit": "s"
+      }
+    }
+  },
+  "timingFunctions": {
+    "$type": "cubicBezier",
+    "$description": "Easing functions for animations",
+    "ease": {
+      "$value": [0.25, 0.1, 0.25, 1]
+    },
+    "easeIn": {
+      "$value": [0.42, 0, 1, 1]
+    },
+    "easeOut": {
+      "$value": [0, 0, 0.58, 1]
+    },
+    "easeInOut": {
+      "$value": [0.42, 0, 0.58, 1]
+    },
+    "linear": {
+      "$value": [0, 0, 1, 1]
+    }
+  },
+  "fontMetrics": {
+    "$type": "number",
+    "$description": "Numeric font metrics",
+    "lineHeightTight": {
+      "$value": 1.2
+    },
+    "lineHeightNormal": {
+      "$value": 1.5
+    },
+    "lineHeightLoose": {
+      "$value": 1.8
+    },
+    "letterSpacingTight": {
+      "$value": -0.02
+    },
+    "letterSpacingNormal": {
+      "$value": 0
+    },
+    "letterSpacingWide": {
+      "$value": 0.05
+    }
+  },
+  "fontFamilies": {
+    "$type": "fontFamily",
+    "$description": "Font family tokens",
+    "sans": {
+      "$value": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    },
+    "serif": {
+      "$value": "Georgia, serif"
+    },
+    "mono": {
+      "$value": "'Courier New', monospace"
+    },
+    "sansArray": {
+      "$value": [
+        "Inter",
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "Segoe UI",
+        "sans-serif"
+      ],
+      "$description": "Font family as array"
+    }
+  },
+  "fontWeights": {
+    "$type": "fontWeight",
+    "$description": "Font weight tokens",
+    "thin": {
+      "$value": 100
+    },
+    "light": {
+      "$value": 300
+    },
+    "normal": {
+      "$value": 400
+    },
+    "medium": {
+      "$value": 500
+    },
+    "semibold": {
+      "$value": 600
+    },
+    "bold": {
+      "$value": 700
+    },
+    "blackString": {
+      "$value": "900",
+      "$description": "Font weight as string"
+    }
+  },
+  "motions": {
+    "$type": "transition",
+    "$description": "Complete transition tokens with timing functions",
+    "default": {
+      "$value": {
+        "duration": {
+          "value": 300,
+          "unit": "ms"
+        },
+        "delay": {
+          "value": 0,
+          "unit": "ms"
+        },
+        "timingFunction": [0.25, 0.1, 0.25, 1]
+      }
+    },
+    "fast": {
+      "$value": {
+        "duration": {
+          "value": 100,
+          "unit": "ms"
+        },
+        "delay": {
+          "value": 0,
+          "unit": "ms"
+        },
+        "timingFunction": [0.42, 0, 0.58, 1]
+      }
+    },
+    "slowWithDelay": {
+      "$value": {
+        "duration": {
+          "value": 500,
+          "unit": "ms"
+        },
+        "delay": {
+          "value": 100,
+          "unit": "ms"
+        },
+        "timingFunction": [0.25, 0.1, 0.25, 1]
+      }
+    }
+  },
+  "strokes": {
+    "$type": "strokeStyle",
+    "$description": "Stroke style tokens",
+    "solid": {
+      "$value": "solid"
+    },
+    "dashed": {
+      "$value": "dashed"
+    },
+    "dotted": {
+      "$value": "dotted"
+    },
+    "double": {
+      "$value": "double"
+    },
+    "customDashed": {
+      "$value": {
+        "dashArray": [
+          {
+            "value": 4,
+            "unit": "px"
+          },
+          {
+            "value": 2,
+            "unit": "px"
+          }
+        ],
+        "lineCap": "round"
+      }
+    }
+  },
+  "shadows": {
+    "$type": "shadow",
+    "$description": "Shadow tokens",
+    "sm": {
+      "$value": {
+        "color": {
+          "colorSpace": "srgb",
+          "components": [0, 0, 0, 0.1]
+        },
+        "offsetX": {
+          "value": 1,
+          "unit": "px"
+        },
+        "offsetY": {
+          "value": 2,
+          "unit": "px"
+        },
+        "blur": {
+          "value": 4,
+          "unit": "px"
+        },
+        "spread": {
+          "value": 0,
+          "unit": "px"
+        }
+      }
+    },
+    "md": {
+      "$value": {
+        "color": {
+          "colorSpace": "srgb",
+          "components": [0, 0, 0, 0.15]
+        },
+        "offsetX": {
+          "value": 0,
+          "unit": "px"
+        },
+        "offsetY": {
+          "value": 4,
+          "unit": "px"
+        },
+        "blur": {
+          "value": 8,
+          "unit": "px"
+        },
+        "spread": {
+          "value": 0,
+          "unit": "px"
+        }
+      }
+    },
+    "lg": {
+      "$value": {
+        "color": {
+          "colorSpace": "srgb",
+          "components": [0, 0, 0, 0.2]
+        },
+        "offsetX": {
+          "value": 0,
+          "unit": "px"
+        },
+        "offsetY": {
+          "value": 10,
+          "unit": "px"
+        },
+        "blur": {
+          "value": 24,
+          "unit": "px"
+        },
+        "spread": {
+          "value": -4,
+          "unit": "px"
+        },
+        "inset": false
+      }
+    },
+    "inset": {
+      "$value": {
+        "color": {
+          "colorSpace": "srgb",
+          "components": [0, 0, 0, 0.1]
+        },
+        "offsetX": {
+          "value": 0,
+          "unit": "px"
+        },
+        "offsetY": {
+          "value": 2,
+          "unit": "px"
+        },
+        "blur": {
+          "value": 4,
+          "unit": "px"
+        },
+        "inset": true
+      }
+    },
+    "multiple": {
+      "$value": [
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [0, 0, 0, 0.1]
+          },
+          "offsetX": {
+            "value": 0,
+            "unit": "px"
+          },
+          "offsetY": {
+            "value": 1,
+            "unit": "px"
+          },
+          "blur": {
+            "value": 2,
+            "unit": "px"
+          }
+        },
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [0, 0, 0, 0.05]
+          },
+          "offsetX": {
+            "value": 0,
+            "unit": "px"
+          },
+          "offsetY": {
+            "value": 4,
+            "unit": "px"
+          },
+          "blur": {
+            "value": 8,
+            "unit": "px"
+          }
+        }
+      ],
+      "$description": "Multiple shadow layers"
+    }
+  },
+  "borders": {
+    "$type": "border",
+    "$description": "Border tokens",
+    "thin": {
+      "$value": {
+        "color": {
+          "colorSpace": "srgb",
+          "components": [0.9, 0.9, 0.9]
+        },
+        "width": {
+          "value": 1,
+          "unit": "px"
+        },
+        "style": "solid"
+      }
+    },
+    "thick": {
+      "$value": {
+        "color": {
+          "colorSpace": "srgb",
+          "components": [0.5, 0.5, 0.5]
+        },
+        "width": {
+          "value": 2,
+          "unit": "px"
+        },
+        "style": "solid"
+      }
+    },
+    "dashed": {
+      "$value": {
+        "color": {
+          "colorSpace": "srgb",
+          "components": [0.7, 0.7, 0.7]
+        },
+        "width": {
+          "value": 1,
+          "unit": "px"
+        },
+        "style": "dashed"
+      }
+    }
+  },
+  "typography": {
+    "$type": "typography",
+    "$description": "Typography presets",
+    "h1": {
+      "$value": {
+        "fontFamily": "Inter, sans-serif",
+        "fontSize": {
+          "value": 32,
+          "unit": "px"
+        },
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "letterSpacing": {
+          "value": -0.02,
+          "unit": "px"
+        }
+      },
+      "$description": "Large heading style"
+    },
+    "h2": {
+      "$value": {
+        "fontFamily": "Inter, sans-serif",
+        "fontSize": {
+          "value": 24,
+          "unit": "px"
+        },
+        "fontWeight": 600,
+        "lineHeight": 1.3,
+        "letterSpacing": {
+          "value": 0,
+          "unit": "px"
+        }
+      }
+    },
+    "body": {
+      "$value": {
+        "fontFamily": "Inter, sans-serif",
+        "fontSize": {
+          "value": 16,
+          "unit": "px"
+        },
+        "fontWeight": 400,
+        "lineHeight": 1.5,
+        "letterSpacing": {
+          "value": 0,
+          "unit": "px"
+        }
+      }
+    },
+    "small": {
+      "$value": {
+        "fontFamily": "Inter, sans-serif",
+        "fontSize": {
+          "value": 12,
+          "unit": "px"
+        },
+        "fontWeight": 400,
+        "lineHeight": 1.4,
+        "letterSpacing": {
+          "value": 0.02,
+          "unit": "px"
+        }
+      }
+    },
+    "mono": {
+      "$value": {
+        "fontFamily": "'Courier New', monospace",
+        "fontSize": {
+          "value": 14,
+          "unit": "px"
+        },
+        "fontWeight": 400,
+        "lineHeight": 1.6,
+        "letterSpacing": {
+          "value": 0,
+          "unit": "px"
+        }
+      }
+    }
+  },
+  "gradients": {
+    "$type": "gradient",
+    "$description": "Gradient tokens",
+    "primary": {
+      "$value": [
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [0, 0.4, 0.8]
+          },
+          "position": 0
+        },
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [0.1, 0.5, 0.9]
+          },
+          "position": 1
+        }
+      ],
+      "$description": "Primary brand gradient"
+    },
+    "sunset": {
+      "$value": [
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [1, 0.3, 0.2]
+          },
+          "position": 0
+        },
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [1, 0.65, 0.2]
+          },
+          "position": 0.5
+        },
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [0.95, 0.4, 0.6]
+          },
+          "position": 1
+        }
+      ],
+      "$description": "Multi-stop sunset gradient"
+    },
+    "subtle": {
+      "$value": [
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [0.98, 0.98, 0.98]
+          },
+          "position": 0
+        },
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [0.95, 0.95, 0.95]
+          },
+          "position": 1
+        }
+      ]
+    }
+  },
+  "deprecated": {
+    "oldColor": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [0.5, 0.5, 0.5]
+      },
+      "$deprecated": "Use colors.primary instead",
+      "$description": "This token has been deprecated"
+    },
+    "legacySpacing": {
+      "$type": "dimension",
+      "$value": {
+        "value": 12,
+        "unit": "px"
+      },
+      "$deprecated": true
+    }
+  }
+}

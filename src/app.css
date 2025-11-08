@@ -200,11 +200,30 @@ body {
   align-items: center;
 }
 
+.tree-spacer {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
 .tree-label {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   flex: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tree-label:hover {
+  background: var(--bg-hover);
+}
+
+.tree-label.selected {
+  background: #4a5878;
+  color: white;
 }
 
 /* Tree items (children) */
