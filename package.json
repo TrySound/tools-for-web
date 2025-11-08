@@ -31,6 +31,7 @@
     "@tsconfig/svelte": "^5.0.5",
     "change-case": "^5.4.4",
     "fractional-indexing": "^3.2.0",
+    "json-stringify-pretty-compact": "^4.0.0",
     "nano-staged": "^0.8.0",
     "prettier": "^3.6.2",
     "prettier-plugin-svelte": "^3.4.0",

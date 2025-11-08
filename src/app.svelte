@@ -1,5 +1,6 @@
 <script lang="ts">
   import { kebabCase } from "change-case";
+  import stringify from "json-stringify-pretty-compact";
   import { treeState } from "./state.svelte";
   import type { GroupMeta, TokenMeta } from "./state.svelte";
   import type { TreeNode } from "./store";
@@ -118,7 +119,7 @@
 
   function serializeToJson(): string {
     const result = serializeDesignTokens(treeState.nodes());
-    return JSON.stringify(result, null, 2);
+    return stringify(result);
   }
 
   const jsonOutput = $derived(serializeToJson());

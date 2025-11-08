@@ -23,6 +23,9 @@ importers:
       fractional-indexing:
         specifier: ^3.2.0
         version: 3.2.0
+      json-stringify-pretty-compact:
+        specifier: ^4.0.0
+        version: 4.0.0
       nano-staged:
         specifier: ^0.8.0
         version: 0.8.0
@@ -499,6 +502,9 @@ packages:
 
   is-reference@3.0.3:
     resolution: {integrity: sha512-ixkJoqQvAP88E6wLydLGGqCJsrFUnqoH6HnaczB8XmDH1oaWU+xxdptvikTgaEhtZ53Ky6YXiBuUI2WXLMCwjw==}
+
+  json-stringify-pretty-compact@4.0.0:
+    resolution: {integrity: sha512-3CNZ2DnrpByG9Nqj6Xo8vqbjT4F6N+tb4Gb28ESAZjYZ5yqvmc56J+/kuIwkaAMOyblTQhUW7PxMkUb8Q36N3Q==}
 
   locate-character@3.0.0:
     resolution: {integrity: sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==}
@@ -1041,6 +1047,8 @@ snapshots:
   is-reference@3.0.3:
     dependencies:
       '@types/estree': 1.0.8
+
+  json-stringify-pretty-compact@4.0.0: {}
 
   locate-character@3.0.0: {}
 
