@@ -149,3 +149,34 @@ test("should notify subscribers only once per transaction", () => {
   // Should notify only once after the transaction completes
   expect(notifyCount).toBe(1);
 });
+
+test("should return nodes as Map", () => {
+  const store = new TreeStore();
+  store.transact((tx) => {
+    tx.set({ nodeId: "node1", parentId: undefined, index: "a0", meta });
+    tx.set({ nodeId: "node2", parentId: "node1", index: "a0", meta });
+    tx.set({ nodeId: "node3", parentId: "node1", index: "b0", meta });
+  });
+  const nodesMap = store.nodes();
+  expect(nodesMap).toBeInstanceOf(Map);
+  expect(nodesMap.size).toBe(3);
+  expect(nodesMap.has("node1")).toBe(true);
+  expect(nodesMap.has("node2")).toBe(true);
+  expect(nodesMap.has("node3")).toBe(true);
+  expect(nodesMap.get("node1")?.nodeId).toBe("node1");
+  expect(nodesMap.get("node2")?.parentId).toBe("node1");
+});
+
+test("nodes() should return a copy of the internal map", () => {
+  const store = new TreeStore();
+  store.transact((tx) => {
+    tx.set({ nodeId: "node1", parentId: undefined, index: "a0", meta });
+  });
+  const nodesMap1 = store.nodes();
+  const nodesMap2 = store.nodes();
+  // Should be different Map instances
+  expect(nodesMap1).not.toBe(nodesMap2);
+  // But have the same content
+  expect(nodesMap1.size).toBe(nodesMap2.size);
+  expect(nodesMap1.get("node1")).toEqual(nodesMap2.get("node1"));
+});

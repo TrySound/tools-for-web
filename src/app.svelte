@@ -3,11 +3,13 @@
   import { treeState } from "./state.svelte";
   import type { GroupMeta, TokenMeta } from "./state.svelte";
   import type { TreeNode } from "./store";
+  import { serializeDesignTokens } from "./tokens";
 
   const rootNodes = $derived(treeState.getChildren(undefined));
 
   let expandedNodes = $state(new Set<string>());
   let selectedNodeId = $state<string | null>(null);
+  let outputMode = $state<"css" | "json">("css");
 
   function toggleNode(nodeId: string) {
     const newSet = new Set(expandedNodes);
@@ -68,7 +70,7 @@
       const b = Math.round(components[2] * 255);
       return `rgb(${r}, ${g}, ${b})`;
     }
-    return null;
+    return "transparent";
   }
 
   function buildPath(nodeId: string): string[] {
@@ -113,6 +115,13 @@
   }
 
   const cssOutput = $derived(generateCssVariables());
+
+  function serializeToJson(): string {
+    const result = serializeDesignTokens(treeState.nodes());
+    return JSON.stringify(result, null, 2);
+  }
+
+  const jsonOutput = $derived(serializeToJson());
 </script>
 
 {#snippet treeItem(node: TreeNode<GroupMeta | TokenMeta>, depth: number)}
@@ -136,18 +145,18 @@
     {:else}
       <span class="tree-spacer"></span>
     {/if}
-    <span
+    {#if colorPreview}
+      <div class="token-preview" style="background: {colorPreview};"></div>
+    {/if}
+    <button
       class="tree-label"
       class:selected={isSelected}
       onclick={() => selectNode(node.nodeId)}
     >
       {node.meta.name}
-    </span>
+    </button>
     {#if valuePreview}
       <div class="tree-preview">
-        {#if colorPreview}
-          <div class="token-preview" style="background: {colorPreview};"></div>
-        {/if}
         <span class="tree-preview-value">{valuePreview}</span>
       </div>
     {/if}
@@ -162,7 +171,7 @@
 
 <div class="container">
   <!-- Toolbar -->
-  <header class="toolbar">
+  <header class="toolbar" hidden>
     <div class="toolbar-section">
       <button class="toolbar-btn" title="New project">
         <span class="icon">✚</span>
@@ -201,13 +210,37 @@
       </div>
     </aside>
 
-    <!-- Right Panel: CSS Variables -->
+    <!-- Right Panel: CSS Variables / JSON -->
     <main class="panel right-panel">
       <div class="panel-header">
-        <h2 class="panel-title">CSS Variables</h2>
+        <h2 class="panel-title">
+          {outputMode === "css" ? "CSS Variables" : "Design Tokens JSON"}
+        </h2>
+        <div class="output-mode-switcher">
+          <button
+            class="mode-btn"
+            class:active={outputMode === "css"}
+            onclick={() => (outputMode = "css")}
+            title="Show CSS Variables"
+          >
+            CSS
+          </button>
+          <button
+            class="mode-btn"
+            class:active={outputMode === "json"}
+            onclick={() => (outputMode = "json")}
+            title="Show JSON"
+          >
+            JSON
+          </button>
+        </div>
       </div>
 
-      <textarea class="css-textarea" readonly value={cssOutput}></textarea>
+      <textarea
+        class="css-textarea"
+        readonly
+        value={outputMode === "css" ? cssOutput : jsonOutput}
+      ></textarea>
     </main>
   </div>
 </div>

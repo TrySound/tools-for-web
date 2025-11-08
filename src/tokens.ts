@@ -1,5 +1,5 @@
 import { generateKeyBetween } from "fractional-indexing";
-import type { TreeNode } from "./store";
+import { compareTreeNodes, type TreeNode } from "./store";
 import type { GroupMeta, TokenMeta } from "./state.svelte";
 import { ValueSchema } from "./schema";
 
@@ -159,4 +159,81 @@ export function parseDesignTokens(input: unknown): ParseResult {
     nodes,
     errors: collectedErrors,
   };
+}
+
+export function serializeDesignTokens(
+  nodes: Map<string, TreeNode<TreeNodeMeta>>,
+): Record<string, unknown> {
+  const childrenMap = new Map<string | undefined, TreeNode<TreeNodeMeta>[]>();
+
+  for (const node of nodes.values()) {
+    const children = childrenMap.get(node.parentId) ?? [];
+    children.push(node);
+    childrenMap.set(node.parentId, children);
+  }
+  for (const children of childrenMap.values()) {
+    children.sort(compareTreeNodes);
+  }
+
+  const serializeNode = (
+    node: TreeNode<TreeNodeMeta>,
+    parentType?: string,
+  ): Record<string, unknown> => {
+    const meta = node.meta;
+
+    if (meta.nodeType === "token-group") {
+      const group: Record<string, unknown> = {};
+      // Add group metadata
+      if (meta.type !== undefined) {
+        group.$type = meta.type;
+      }
+      if (meta.description !== undefined) {
+        group.$description = meta.description;
+      }
+      if (meta.deprecated !== undefined) {
+        group.$deprecated = meta.deprecated;
+      }
+      if (meta.extensions !== undefined) {
+        group.$extensions = meta.extensions;
+      }
+      // Add children
+      const children = childrenMap.get(node.nodeId) ?? [];
+      for (const child of children) {
+        group[child.meta.name] = serializeNode(child, meta.type ?? parentType);
+      }
+      return group;
+    }
+
+    if (meta.nodeType === "token") {
+      // Token node
+      const token: Record<string, unknown> = {
+        $value: meta.value,
+      };
+      // Only include $type if it's different from parent type
+      // make token inherit type from group
+      if (meta.type && meta.type !== parentType) {
+        token.$type = meta.type;
+      }
+      if (meta.description !== undefined) {
+        token.$description = meta.description;
+      }
+      if (meta.deprecated !== undefined) {
+        token.$deprecated = meta.deprecated;
+      }
+      if (meta.extensions !== undefined) {
+        token.$extensions = meta.extensions;
+      }
+      return token;
+    }
+
+    meta satisfies never;
+    throw Error("Asset impossible branch");
+  };
+
+  const result: Record<string, unknown> = {};
+  const rootChildren = childrenMap.get(undefined) ?? [];
+  for (const node of rootChildren) {
+    result[node.meta.name] = serializeNode(node);
+  }
+  return result;
 }

@@ -75,3 +75,18 @@ test("should update existing nodes", () => {
   expect(nodes[0].parentId).toBe("parent1");
   expect(nodes[0].index).toBe("b0");
 });
+
+test("should return nodes as Map", () => {
+  const state = new TreeState();
+  state.transact((tx) => {
+    tx.set({ nodeId: "node1", parentId: undefined, index: "a0", meta });
+    tx.set({ nodeId: "node2", parentId: "node1", index: "a0", meta });
+  });
+  const nodesMap = state.nodes();
+  expect(nodesMap).toBeInstanceOf(Map);
+  expect(nodesMap.size).toBe(2);
+  expect(nodesMap.has("node1")).toBe(true);
+  expect(nodesMap.has("node2")).toBe(true);
+  expect(nodesMap.get("node1")?.nodeId).toBe("node1");
+  expect(nodesMap.get("node2")?.parentId).toBe("node1");
+});

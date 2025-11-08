@@ -43,6 +43,10 @@ export class TreeStore<Meta> {
     return Array.from(this.#nodes.values());
   }
 
+  nodes(): Map<string, TreeNode<Meta>> {
+    return new Map(this.#nodes);
+  }
+
   getChildren(nodeId: string | undefined): TreeNode<Meta>[] {
     return Array.from(this.#nodes.values())
       .filter((node) => node.parentId === nodeId)
