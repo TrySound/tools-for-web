@@ -1,10 +1,8 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
   import stringify from "json-stringify-pretty-compact";
-  import TreeView from "./tree-view.svelte";
-  import type { TreeItem } from "./tree-view.svelte";
-  import { treeState } from "./state.svelte";
-  import type { GroupMeta, TokenMeta } from "./state.svelte";
+  import TreeView, { type TreeItem } from "./tree-view.svelte";
+  import { treeState, type TreeNodeMeta } from "./state.svelte";
   import type { TreeNode } from "./store";
   import { serializeDesignTokens } from "./tokens";
   import { generateCssVariables } from "./css-variables";
@@ -14,21 +12,19 @@
   let selectedItems = new SvelteSet<string>();
   let outputMode = $state<"css" | "json">("css");
 
-  function buildTreeItem(node: TreeNode<GroupMeta | TokenMeta>): TreeItem {
+  const buildTreeItem = (node: TreeNode<TreeNodeMeta>): TreeItem => {
     const children = treeState.getChildren(node.nodeId);
     return {
       id: node.nodeId,
       name: node.meta.name,
       children: children.map(buildTreeItem),
     };
-  }
+  };
 
   const treeData = $derived(rootNodes.map(buildTreeItem));
   const defaultExpandedItems = $derived([]);
 
-  function getColorPreview(
-    meta: undefined | GroupMeta | TokenMeta,
-  ): string | null {
+  const getColorPreview = (meta: undefined | TreeNodeMeta) => {
     if (meta?.nodeType !== "token" || meta.type !== "color") return null;
 
     const { colorSpace, components } = meta.value;
@@ -39,12 +35,59 @@
       return `rgb(${r}, ${g}, ${b})`;
     }
     return "transparent";
-  }
+  };
 
-  const cssOutput = $derived(generateCssVariables(treeState.nodes()));
+  const filterNodesToSelected = (
+    nodes: Map<string, TreeNode<TreeNodeMeta>>,
+    selectedIds: Set<string>,
+  ) => {
+    if (selectedIds.size === 0) {
+      return nodes;
+    }
+    const filtered = new Map<string, TreeNode<TreeNodeMeta>>();
+    // Collect all selected nodes and their descendants
+    const addNodeAndDescendants = (nodeId: string) => {
+      const node = nodes.get(nodeId);
+      if (node) {
+        filtered.set(node.nodeId, node);
+        const children = Array.from(nodes.values()).filter(
+          (n) => n.parentId === nodeId,
+        );
+        for (const child of children) {
+          addNodeAndDescendants(child.nodeId);
+        }
+      }
+    };
+    // Collect all ancestors of selected nodes
+    const addAncestors = (nodeId: string) => {
+      const node = nodes.get(nodeId);
+      if (node) {
+        filtered.set(node.nodeId, node);
+        if (node.parentId) {
+          addAncestors(node.parentId);
+        }
+      }
+    };
+    // First add all selected nodes and their descendants
+    for (const nodeId of selectedIds) {
+      addNodeAndDescendants(nodeId);
+    }
+    // Then add all ancestors
+    for (const nodeId of selectedIds) {
+      const node = nodes.get(nodeId);
+      if (node?.parentId) {
+        addAncestors(node.parentId);
+      }
+    }
+    return filtered;
+  };
 
+  const allSelectedNodes = $derived(
+    filterNodesToSelected(treeState.nodes(), selectedItems),
+  );
+  const cssOutput = $derived(generateCssVariables(allSelectedNodes));
   const jsonOutput = $derived(
-    stringify(serializeDesignTokens(treeState.nodes())),
+    stringify(serializeDesignTokens(allSelectedNodes)),
   );
 </script>
 
