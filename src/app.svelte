@@ -1,16 +1,25 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
+  import { hotkeyKeyUX, hotkeyMacCompat, startKeyUX } from "keyux";
   import stringify from "json-stringify-pretty-compact";
+  import { Settings } from "@lucide/svelte";
   import TreeView, { type TreeItem } from "./tree-view.svelte";
   import { treeState, type TreeNodeMeta } from "./state.svelte";
+  import Editor from "./editor.svelte";
   import type { TreeNode } from "./store";
   import { serializeDesignTokens } from "./tokens";
   import { generateCssVariables } from "./css-variables";
+
+  onMount(() => {
+    return startKeyUX(window, [hotkeyKeyUX([hotkeyMacCompat()])]);
+  });
 
   const rootNodes = $derived(treeState.getChildren(undefined));
 
   let selectedItems = new SvelteSet<string>();
   let outputMode = $state<"css" | "json">("css");
+  let editingMode = $state(false);
 
   const buildTreeItem = (node: TreeNode<TreeNodeMeta>): TreeItem => {
     const children = treeState.getChildren(node.nodeId);
@@ -138,6 +147,17 @@
           {#if meta?.type}
             <div class="token-hint">{meta.type}</div>
           {/if}
+          <button
+            class="edit-btn"
+            onclick={() => {
+              editingMode = true;
+              selectedItems.clear();
+              selectedItems.add(item.id);
+            }}
+            title="Edit"
+          >
+            <Settings size={16} />
+          </button>
         </div>
       {/snippet}
 
@@ -153,35 +173,40 @@
 
     <!-- Right Panel: CSS Variables / JSON -->
     <main class="panel right-panel">
-      <div class="panel-header">
-        <h2 class="panel-title">
-          {outputMode === "css" ? "CSS Variables" : "Design Tokens JSON"}
-        </h2>
-        <div class="output-mode-switcher">
-          <button
-            class="mode-btn"
-            class:active={outputMode === "css"}
-            onclick={() => (outputMode = "css")}
-            title="Show CSS Variables"
-          >
-            CSS
-          </button>
-          <button
-            class="mode-btn"
-            class:active={outputMode === "json"}
-            onclick={() => (outputMode = "json")}
-            title="Show JSON"
-          >
-            JSON
-          </button>
+      <!-- Editor Panel -->
+      {#if editingMode}
+        <Editor {selectedItems} bind:editingMode />
+      {:else}
+        <div class="panel-header">
+          <h2 class="panel-title">
+            {outputMode === "css" ? "CSS Variables" : "Design Tokens JSON"}
+          </h2>
+          <div class="output-mode-switcher">
+            <button
+              class="mode-btn"
+              class:active={outputMode === "css"}
+              onclick={() => (outputMode = "css")}
+              title="Show CSS Variables"
+            >
+              CSS
+            </button>
+            <button
+              class="mode-btn"
+              class:active={outputMode === "json"}
+              onclick={() => (outputMode = "json")}
+              title="Show JSON"
+            >
+              JSON
+            </button>
+          </div>
         </div>
-      </div>
 
-      <textarea
-        class="css-textarea"
-        readonly
-        value={outputMode === "css" ? cssOutput : jsonOutput}
-      ></textarea>
+        <textarea
+          class="css-textarea"
+          readonly
+          value={outputMode === "css" ? cssOutput : jsonOutput}
+        ></textarea>
+      {/if}
     </main>
   </div>
 </div>
@@ -333,6 +358,29 @@
     font-weight: 400;
     color: var(--text-primary);
     flex: 1;
+  }
+
+  .edit-btn {
+    visibility: var(--tree-view-item-hover-visibility);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-primary);
+    opacity: 0.6;
+    transition: all 0.2s ease;
+    margin-left: 4px;
+  }
+
+  .edit-btn:hover {
+    background: var(--bg-hover);
+    color: var(--accent);
   }
 
   /* CSS Textarea */

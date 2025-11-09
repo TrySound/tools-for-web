@@ -26,6 +26,9 @@ importers:
       json-stringify-pretty-compact:
         specifier: ^4.0.0
         version: 4.0.0
+      keyux:
+        specifier: ^0.11.3
+        version: 0.11.3
       nano-staged:
         specifier: ^0.8.0
         version: 0.8.0
@@ -505,6 +508,10 @@ packages:
 
   json-stringify-pretty-compact@4.0.0:
     resolution: {integrity: sha512-3CNZ2DnrpByG9Nqj6Xo8vqbjT4F6N+tb4Gb28ESAZjYZ5yqvmc56J+/kuIwkaAMOyblTQhUW7PxMkUb8Q36N3Q==}
+
+  keyux@0.11.3:
+    resolution: {integrity: sha512-IzS9emdl1gazLhGvCcwy066WYeOJtoxuncDVIsKvvyZZXRmPwUusHuvvOd4bjT9qiN+kBc9ntP6CaKYM16qzPA==}
+    engines: {node: ^18.0.0 || >=20.0.0}
 
   locate-character@3.0.0:
     resolution: {integrity: sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==}
@@ -1049,6 +1056,8 @@ snapshots:
       '@types/estree': 1.0.8
 
   json-stringify-pretty-compact@4.0.0: {}
+
+  keyux@0.11.3: {}
 
   locate-character@3.0.0: {}
 

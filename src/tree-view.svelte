@@ -321,6 +321,7 @@
     [role="tree"] &[data-hovered="true"] {
       --tree-view-bg: var(--bg-hover);
       --tree-view-bg-hover: var(--bg-hover);
+      --tree-view-item-hover-visibility: visible;
     }
 
     [role="tree"] &[aria-selected="true"] {
@@ -346,9 +347,11 @@
     padding-left: calc(8px + (var(--tree-view-level) - 1) * 12px);
     background-color: var(--tree-view-bg);
     color: var(--text-primary);
+    --tree-view-item-hover-visibility: hidden;
 
     &:hover {
       background-color: var(--tree-view-bg-hover);
+      --tree-view-item-hover-visibility: visible;
     }
   }
 
