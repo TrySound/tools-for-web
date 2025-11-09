@@ -1,6 +1,8 @@
 {
   "packageManager": "pnpm@10.20.0",
   "name": "tools-for-web",
+  "author": "Bogdan Chadkin",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
