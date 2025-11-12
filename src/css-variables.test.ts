@@ -29,18 +29,18 @@ describe("generateCssVariables", () => {
       },
     });
     const css = generateCssVariables(nodesToMap(parsed.nodes));
-    expect(css).toContain("--my-color: rgb(255, 0, 0);");
+    expect(css).toContain("--my-color: rgb(100% 0% 0%);");
   });
 
   test("generates CSS variables for color with alpha", () => {
     const parsed = parseDesignTokens({
       myColor: {
         $type: "color",
-        $value: { colorSpace: "srgb", components: [0, 0, 0, 0.5] },
+        $value: { colorSpace: "srgb", components: [0, 0, 0], alpha: 0.5 },
       },
     });
     const css = generateCssVariables(nodesToMap(parsed.nodes));
-    expect(css).toContain("--my-color: rgba(0, 0, 0, 0.5);");
+    expect(css).toContain("--my-color: rgb(0% 0% 0% / 0.5);");
   });
 
   test("generates CSS variables for dimension token", () => {
@@ -191,7 +191,7 @@ describe("generateCssVariables", () => {
       sm: {
         $type: "shadow",
         $value: {
-          color: { colorSpace: "srgb", components: [0, 0, 0, 0.1] },
+          color: { colorSpace: "srgb", components: [0, 0, 0], alpha: 0.1 },
           offsetX: { value: 1, unit: "px" },
           offsetY: { value: 2, unit: "px" },
           blur: { value: 4, unit: "px" },
@@ -200,7 +200,7 @@ describe("generateCssVariables", () => {
       },
     });
     const css = generateCssVariables(nodesToMap(parsed.nodes));
-    expect(css).toContain("--sm: 1px 2px 4px 0px rgba(0, 0, 0, 0.1);");
+    expect(css).toContain("--sm: 1px 2px 4px 0px rgb(0% 0% 0% / 0.1);");
   });
 
   test("generates CSS variables for inset shadow", () => {
@@ -226,13 +226,13 @@ describe("generateCssVariables", () => {
         $type: "shadow",
         $value: [
           {
-            color: { colorSpace: "srgb", components: [0, 0, 0, 0.1] },
+            color: { colorSpace: "srgb", components: [0, 0, 0], alpha: 0.1 },
             offsetX: { value: 0, unit: "px" },
             offsetY: { value: 1, unit: "px" },
             blur: { value: 2, unit: "px" },
           },
           {
-            color: { colorSpace: "srgb", components: [0, 0, 0, 0.05] },
+            color: { colorSpace: "srgb", components: [0, 0, 0], alpha: 0.05 },
             offsetX: { value: 0, unit: "px" },
             offsetY: { value: 4, unit: "px" },
             blur: { value: 8, unit: "px" },
@@ -242,8 +242,8 @@ describe("generateCssVariables", () => {
     });
     const css = generateCssVariables(nodesToMap(parsed.nodes));
     expect(css).toContain("--multiple:");
-    expect(css).toContain("rgba(0, 0, 0, 0.1)");
-    expect(css).toContain("rgba(0, 0, 0, 0.05)");
+    expect(css).toContain("rgb(0% 0% 0% / 0.1)");
+    expect(css).toContain("rgb(0% 0% 0% / 0.05)");
   });
 
   test("generates CSS variables for border token", () => {
@@ -258,10 +258,10 @@ describe("generateCssVariables", () => {
       },
     });
     const css = generateCssVariables(nodesToMap(parsed.nodes));
-    expect(css).toContain("--thin-color: rgb(230, 230, 230);");
+    expect(css).toContain("--thin-color: rgb(90% 90% 90%);");
     expect(css).toContain("--thin-width: 1px;");
     expect(css).toContain("--thin-style: solid;");
-    expect(css).toContain("--thin: 1px solid rgb(230, 230, 230);");
+    expect(css).toContain("--thin: 1px solid rgb(90% 90% 90%);");
   });
 
   test("generates CSS variables for typography token", () => {
@@ -304,7 +304,7 @@ describe("generateCssVariables", () => {
     });
     const css = generateCssVariables(nodesToMap(parsed.nodes));
     expect(css).toContain(
-      "--primary: linear-gradient(90deg, rgb(0, 102, 204) 0%, rgb(26, 128, 230) 100%);",
+      "--primary: linear-gradient(90deg, rgb(0% 40% 80%) 0%, rgb(10% 50% 90%) 100%);",
     );
   });
 

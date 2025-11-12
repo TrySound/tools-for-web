@@ -74,7 +74,8 @@
     "transparent": {
       "$value": {
         "colorSpace": "srgb",
-        "components": [0, 0, 0, 0]
+        "components": [0, 0, 0],
+        "alpha": 0
       },
       "$description": "Transparent color with alpha channel"
     }
@@ -347,7 +348,8 @@
       "$value": {
         "color": {
           "colorSpace": "srgb",
-          "components": [0, 0, 0, 0.1]
+          "components": [0, 0, 0],
+          "alpha": 0.1
         },
         "offsetX": {
           "value": 1,
@@ -371,7 +373,8 @@
       "$value": {
         "color": {
           "colorSpace": "srgb",
-          "components": [0, 0, 0, 0.15]
+          "components": [0, 0, 0],
+          "alpha": 0.15
         },
         "offsetX": {
           "value": 0,
@@ -395,7 +398,8 @@
       "$value": {
         "color": {
           "colorSpace": "srgb",
-          "components": [0, 0, 0, 0.2]
+          "components": [0, 0, 0],
+          "alpha": 0.2
         },
         "offsetX": {
           "value": 0,
@@ -420,7 +424,8 @@
       "$value": {
         "color": {
           "colorSpace": "srgb",
-          "components": [0, 0, 0, 0.1]
+          "components": [0, 0, 0],
+          "alpha": 0.1
         },
         "offsetX": {
           "value": 0,
@@ -442,7 +447,8 @@
         {
           "color": {
             "colorSpace": "srgb",
-            "components": [0, 0, 0, 0.1]
+            "components": [0, 0, 0],
+            "alpha": 0.1
           },
           "offsetX": {
             "value": 0,
@@ -460,7 +466,8 @@
         {
           "color": {
             "colorSpace": "srgb",
-            "components": [0, 0, 0, 0.05]
+            "components": [0, 0, 0],
+            "alpha": 0.05
           },
           "offsetX": {
             "value": 0,

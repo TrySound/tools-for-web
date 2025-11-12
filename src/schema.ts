@@ -1,8 +1,31 @@
 import { z } from "zod";
 
+// Component can be a number or the 'none' keyword
+const ComponentSchema = z.union([z.number(), z.literal("none")]);
+
+// Supported color spaces according to Design Tokens spec
+const SupportedColorSpaces = z.enum([
+  "srgb",
+  "srgb-linear",
+  "hsl",
+  "hwb",
+  "lab",
+  "lch",
+  "oklab",
+  "oklch",
+  "display-p3",
+  "a98-rgb",
+  "prophoto-rgb",
+  "rec2020",
+  "xyz-d65",
+  "xyz-d50",
+]);
+
 const ColorValueSchema = z.object({
-  colorSpace: z.string(),
-  components: z.array(z.number()),
+  colorSpace: SupportedColorSpaces,
+  components: z.array(ComponentSchema),
+  alpha: z.number().min(0).max(1).optional(),
+  hex: z.string().optional(),
 });
 
 export type ColorValue = z.infer<typeof ColorValueSchema>;

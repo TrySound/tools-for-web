@@ -10,7 +10,7 @@
   import Editor from "./editor.svelte";
   import type { TreeNode } from "./store";
   import { serializeDesignTokens } from "./tokens";
-  import { generateCssVariables } from "./css-variables";
+  import { generateCssVariables, toColorValue } from "./css-variables";
 
   onMount(() => {
     return startKeyUX(window, [hotkeyKeyUX([hotkeyMacCompat()])]);
@@ -34,19 +34,6 @@
 
   const treeData = $derived(rootNodes.map(buildTreeItem));
   const defaultExpandedItems = $derived([]);
-
-  const getColorPreview = (meta: undefined | TreeNodeMeta) => {
-    if (meta?.nodeType !== "token" || meta.type !== "color") return null;
-
-    const { colorSpace, components } = meta.value;
-    if (colorSpace === "srgb" && components.length === 3) {
-      const r = Math.round(components[0] * 255);
-      const g = Math.round(components[1] * 255);
-      const b = Math.round(components[2] * 255);
-      return `rgb(${r}, ${g}, ${b})`;
-    }
-    return "transparent";
-  };
 
   const filterNodesToSelected = (
     nodes: Map<string, TreeNode<TreeNodeMeta>>,
@@ -325,7 +312,7 @@
           {#if meta?.nodeType === "token" && meta?.type === "color"}
             <div
               class="token-preview"
-              style="background: {getColorPreview(meta)};"
+              style="background: {toColorValue(meta.value)};"
             ></div>
           {/if}
           <span class="token-name">{item.name}</span>
