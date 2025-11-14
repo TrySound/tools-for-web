@@ -137,6 +137,103 @@
         </div>
       </div>
     {/if}
+
+    {#if meta?.nodeType === "token" && meta.type === "dimension"}
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Dimension</label>
+        <div class="dimension-input-group">
+          <input
+            id="dimension-value-input"
+            class="form-input"
+            type="number"
+            value={meta.value.value}
+            oninput={(e) => {
+              const value = Number.parseFloat(e.currentTarget.value);
+              if (!Number.isNaN(value)) {
+                updateMeta({ value: { ...meta.value, value } });
+              }
+            }}
+            step="0.1"
+            placeholder="Value"
+          />
+          <select
+            id="dimension-unit-input"
+            class="form-select dimension-unit-select"
+            value={meta.value.unit}
+            onchange={(e) => {
+              updateMeta({
+                value: {
+                  ...meta.value,
+                  unit: e.currentTarget.value as "px" | "rem",
+                },
+              });
+            }}
+          >
+            <option value="px">px</option>
+            <option value="rem">rem</option>
+          </select>
+        </div>
+      </div>
+    {/if}
+
+    {#if meta?.nodeType === "token" && meta.type === "duration"}
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Duration</label>
+        <div class="duration-input-group">
+          <input
+            id="duration-value-input"
+            class="form-input"
+            type="number"
+            value={meta.value.value}
+            oninput={(e) => {
+              const value = Number.parseFloat(e.currentTarget.value);
+              if (!Number.isNaN(value)) {
+                updateMeta({ value: { ...meta.value, value } });
+              }
+            }}
+            step="1"
+            placeholder="Value"
+          />
+          <select
+            id="duration-unit-input"
+            class="form-select duration-unit-select"
+            value={meta.value.unit}
+            onchange={(e) => {
+              updateMeta({
+                value: {
+                  ...meta.value,
+                  unit: e.currentTarget.value as "ms" | "s",
+                },
+              });
+            }}
+          >
+            <option value="ms">ms</option>
+            <option value="s">s</option>
+          </select>
+        </div>
+      </div>
+    {/if}
+
+    {#if meta?.nodeType === "token" && meta.type === "number"}
+      <div class="form-group">
+        <label for="number-input">Value</label>
+        <input
+          id="number-input"
+          class="form-input"
+          type="number"
+          value={meta.value}
+          oninput={(e) => {
+            const value = Number.parseFloat(e.currentTarget.value);
+            if (!Number.isNaN(value)) {
+              updateMeta({ value });
+            }
+          }}
+          step="0.1"
+        />
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -210,7 +307,8 @@
   }
 
   .form-input,
-  .form-textarea {
+  .form-textarea,
+  .form-select {
     padding: 8px 12px;
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
@@ -222,7 +320,8 @@
   }
 
   .form-input:focus,
-  .form-textarea:focus {
+  .form-textarea:focus,
+  .form-select:focus {
     outline: none;
     border-color: var(--accent);
     background: var(--bg-primary);
@@ -255,5 +354,33 @@
     color: var(--text-secondary);
     min-width: 50px;
     text-align: center;
+  }
+
+  .dimension-input-group {
+    display: flex;
+    gap: 8px;
+  }
+
+  .dimension-input-group .form-input {
+    flex: 1;
+  }
+
+  .dimension-unit-select {
+    field-sizing: content;
+    min-width: 60px;
+  }
+
+  .duration-input-group {
+    display: flex;
+    gap: 8px;
+  }
+
+  .duration-input-group .form-input {
+    flex: 1;
+  }
+
+  .duration-unit-select {
+    field-sizing: content;
+    min-width: 50px;
   }
 </style>
