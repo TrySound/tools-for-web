@@ -9,6 +9,51 @@
     editingMode = $bindable(),
   }: { selectedItems: SvelteSet<string>; editingMode: boolean } = $props();
 
+  const fontWeightMap: Record<string, number> = {
+    thin: 100,
+    hairline: 100,
+    "extra-light": 200,
+    "ultra-light": 200,
+    light: 300,
+    normal: 400,
+    regular: 400,
+    book: 400,
+    medium: 500,
+    "semi-bold": 600,
+    "demi-bold": 600,
+    bold: 700,
+    "extra-bold": 800,
+    "ultra-bold": 800,
+    black: 900,
+    heavy: 900,
+    "extra-black": 950,
+    "ultra-black": 950,
+  };
+
+  const normalizeFontWeight = (value: number | string): number => {
+    if (typeof value === "number") {
+      return value;
+    }
+    const normalized = value.toLowerCase().trim();
+    return fontWeightMap[normalized] ?? Number.parseInt(value, 10);
+  };
+
+  const normalizeFontFamily = (value: string | string[]): string | string[] => {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    // If it's a string with commas, split it into an array
+    const trimmed = value.trim();
+    if (trimmed.includes(",")) {
+      return trimmed
+        .split(",")
+        .map((f) => f.trim())
+        .filter(Boolean);
+    }
+    // Otherwise keep it as a string
+    return trimmed;
+  };
+
   const node = $derived.by(() => {
     const nodeId = Array.from(selectedItems).at(0);
     if (nodeId) {
@@ -46,6 +91,72 @@
     }
   };
 </script>
+
+{#snippet dimensionEditor(dimension: any, onChange: (value: any) => void)}
+  <div class="dimension-input-group">
+    <input
+      class="form-input"
+      type="number"
+      value={dimension.value}
+      step="0.1"
+      placeholder="Value"
+      oninput={(e) => {
+        const value = Number.parseFloat(e.currentTarget.value);
+        if (!Number.isNaN(value)) {
+          onChange({ ...dimension, value });
+        }
+      }}
+    />
+    <select
+      class="form-select dimension-unit-select"
+      value={dimension.unit}
+      onchange={(e) => {
+        onChange({
+          ...dimension,
+          unit: e.currentTarget.value,
+        });
+      }}
+    >
+      <option value="px">px</option>
+      <option value="rem">rem</option>
+    </select>
+  </div>
+{/snippet}
+
+{#snippet fontFamilyEditor(fontFamily: any, onChange: (value: any) => void)}
+  <textarea
+    class="form-textarea"
+    placeholder="e.g., Inter, -apple-system, BlinkMacSystemFont, sans-serif"
+    value={typeof fontFamily === "string" ? fontFamily : fontFamily.join(", ")}
+    oninput={(e) => {
+      const input = e.currentTarget.value;
+      const normalized = normalizeFontFamily(input);
+      onChange(normalized);
+    }}
+  ></textarea>
+{/snippet}
+
+{#snippet fontWeightEditor(fontWeight: any, onChange: (value: any) => void)}
+  <select
+    class="form-select"
+    value={String(normalizeFontWeight(fontWeight))}
+    onchange={(e) => {
+      const value = Number.parseInt(e.currentTarget.value);
+      onChange(value);
+    }}
+  >
+    <option value="100">100 — thin, hairline</option>
+    <option value="200">200 — extra-light, ultra-light</option>
+    <option value="300">300 — light</option>
+    <option value="400">400 — normal, regular, book</option>
+    <option value="500">500 — medium</option>
+    <option value="600">600 — semi-bold, demi-bold</option>
+    <option value="700">700 — bold</option>
+    <option value="800">800 — extra-bold, ultra-bold</option>
+    <option value="900">900 — black, heavy</option>
+    <option value="950">950 — extra-black, ultra-black</option>
+  </select>
+{/snippet}
 
 <div class="form-panel">
   <div class="form-header">
@@ -232,6 +343,106 @@
           }}
           step="0.1"
         />
+      </div>
+    {/if}
+
+    {#if meta?.nodeType === "token" && meta.type === "fontFamily"}
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Font Family</label>
+        {@render fontFamilyEditor(meta.value, (value: any) => {
+          updateMeta({ value });
+        })}
+      </div>
+    {/if}
+
+    {#if meta?.nodeType === "token" && meta.type === "fontWeight"}
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Font Weight</label>
+        {@render fontWeightEditor(meta.value, (value: any) => {
+          updateMeta({ value });
+        })}
+      </div>
+    {/if}
+
+    {#if meta?.nodeType === "token" && meta.type === "typography"}
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Font Family</label>
+        {@render fontFamilyEditor(meta.value.fontFamily, (fontFamily: any) => {
+          updateMeta({
+            value: {
+              ...meta.value,
+              fontFamily,
+            },
+          });
+        })}
+      </div>
+
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Font Size</label>
+        {@render dimensionEditor(meta.value.fontSize, (fontSize: any) => {
+          updateMeta({
+            value: {
+              ...meta.value,
+              fontSize,
+            },
+          });
+        })}
+      </div>
+
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Font Weight</label>
+        {@render fontWeightEditor(meta.value.fontWeight, (fontWeight: any) => {
+          updateMeta({
+            value: {
+              ...meta.value,
+              fontWeight,
+            },
+          });
+        })}
+      </div>
+
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Line Height</label>
+        <input
+          class="form-input"
+          type="number"
+          value={meta.value.lineHeight}
+          oninput={(e) => {
+            const value = Number.parseFloat(e.currentTarget.value);
+            if (!Number.isNaN(value)) {
+              updateMeta({
+                value: {
+                  ...meta.value,
+                  lineHeight: value,
+                },
+              });
+            }
+          }}
+          step="0.1"
+          placeholder="e.g., 1.5"
+        />
+      </div>
+
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Letter Spacing</label>
+        {@render dimensionEditor(
+          meta.value.letterSpacing,
+          (letterSpacing: any) => {
+            updateMeta({
+              value: {
+                ...meta.value,
+                letterSpacing,
+              },
+            });
+          },
+        )}
       </div>
     {/if}
   </div>
