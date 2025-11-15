@@ -3,6 +3,13 @@
   import { X } from "@lucide/svelte";
   import { treeState, type TreeNodeMeta } from "./state.svelte";
   import { parseColor, serializeColor } from "./color";
+  import type {
+    CubicBezierValue,
+    DimensionValue,
+    FontFamilyValue,
+    TransitionValue,
+  } from "./schema";
+  import CubicBezierEditor from "./cubic-bezier-editor.svelte";
 
   let {
     selectedItems,
@@ -92,7 +99,10 @@
   };
 </script>
 
-{#snippet dimensionEditor(dimension: any, onChange: (value: any) => void)}
+{#snippet dimensionEditor(
+  dimension: DimensionValue,
+  onChange: (value: DimensionValue) => void,
+)}
   <div class="dimension-input-group">
     <input
       class="form-input"
@@ -113,7 +123,7 @@
       onchange={(e) => {
         onChange({
           ...dimension,
-          unit: e.currentTarget.value,
+          unit: e.currentTarget.value as "px" | "rem",
         });
       }}
     >
@@ -123,7 +133,10 @@
   </div>
 {/snippet}
 
-{#snippet fontFamilyEditor(fontFamily: any, onChange: (value: any) => void)}
+{#snippet fontFamilyEditor(
+  fontFamily: FontFamilyValue,
+  onChange: (value: FontFamilyValue) => void,
+)}
   <textarea
     class="form-textarea"
     placeholder="e.g., Inter, -apple-system, BlinkMacSystemFont, sans-serif"
@@ -136,12 +149,15 @@
   ></textarea>
 {/snippet}
 
-{#snippet fontWeightEditor(fontWeight: any, onChange: (value: any) => void)}
+{#snippet fontWeightEditor(
+  fontWeight: number | string,
+  onChange: (value: number) => void,
+)}
   <select
     class="form-select"
     value={String(normalizeFontWeight(fontWeight))}
     onchange={(e) => {
-      const value = Number.parseInt(e.currentTarget.value);
+      const value = Number.parseInt(e.currentTarget.value, 10);
       onChange(value);
     }}
   >
@@ -350,7 +366,7 @@
       <div class="form-group">
         <!-- svelte-ignore a11y_label_has_associated_control -->
         <label>Font Family</label>
-        {@render fontFamilyEditor(meta.value, (value: any) => {
+        {@render fontFamilyEditor(meta.value, (value) => {
           updateMeta({ value });
         })}
       </div>
@@ -360,9 +376,132 @@
       <div class="form-group">
         <!-- svelte-ignore a11y_label_has_associated_control -->
         <label>Font Weight</label>
-        {@render fontWeightEditor(meta.value, (value: any) => {
+        {@render fontWeightEditor(meta.value, (value) => {
           updateMeta({ value });
         })}
+      </div>
+    {/if}
+
+    {#if meta?.nodeType === "token" && meta.type === "cubicBezier"}
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Easing Function</label>
+        <CubicBezierEditor
+          value={meta.value as CubicBezierValue}
+          onChange={(value: CubicBezierValue) => {
+            updateMeta({ value });
+          }}
+        />
+      </div>
+    {/if}
+
+    {#if meta?.nodeType === "token" && meta.type === "transition"}
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Duration</label>
+        <div class="dimension-input-group">
+          <input
+            class="form-input"
+            type="number"
+            value={(meta.value as TransitionValue).duration.value}
+            step="1"
+            placeholder="Value"
+            oninput={(e) => {
+              const val = Number.parseFloat(e.currentTarget.value);
+              if (!Number.isNaN(val)) {
+                updateMeta({
+                  value: {
+                    ...(meta.value as TransitionValue),
+                    duration: {
+                      ...(meta.value as TransitionValue).duration,
+                      value: val,
+                    },
+                  },
+                });
+              }
+            }}
+          />
+          <select
+            class="form-select duration-unit-select"
+            value={(meta.value as TransitionValue).duration.unit}
+            onchange={(e) => {
+              updateMeta({
+                value: {
+                  ...(meta.value as TransitionValue),
+                  duration: {
+                    ...(meta.value as TransitionValue).duration,
+                    unit: e.currentTarget.value as "ms" | "s",
+                  },
+                },
+              });
+            }}
+          >
+            <option value="ms">ms</option>
+            <option value="s">s</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Delay</label>
+        <div class="dimension-input-group">
+          <input
+            class="form-input"
+            type="number"
+            value={(meta.value as TransitionValue).delay.value}
+            step="1"
+            placeholder="Value"
+            oninput={(e) => {
+              const val = Number.parseFloat(e.currentTarget.value);
+              if (!Number.isNaN(val)) {
+                updateMeta({
+                  value: {
+                    ...(meta.value as TransitionValue),
+                    delay: {
+                      ...(meta.value as TransitionValue).delay,
+                      value: val,
+                    },
+                  },
+                });
+              }
+            }}
+          />
+          <select
+            class="form-select duration-unit-select"
+            value={(meta.value as TransitionValue).delay.unit}
+            onchange={(e) => {
+              updateMeta({
+                value: {
+                  ...(meta.value as TransitionValue),
+                  delay: {
+                    ...(meta.value as TransitionValue).delay,
+                    unit: e.currentTarget.value as "ms" | "s",
+                  },
+                },
+              });
+            }}
+          >
+            <option value="ms">ms</option>
+            <option value="s">s</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label>Timing Function</label>
+        <CubicBezierEditor
+          value={(meta.value as TransitionValue).timingFunction}
+          onChange={(value: CubicBezierValue) => {
+            updateMeta({
+              value: {
+                ...(meta.value as TransitionValue),
+                timingFunction: value,
+              },
+            });
+          }}
+        />
       </div>
     {/if}
 
@@ -370,7 +509,7 @@
       <div class="form-group">
         <!-- svelte-ignore a11y_label_has_associated_control -->
         <label>Font Family</label>
-        {@render fontFamilyEditor(meta.value.fontFamily, (fontFamily: any) => {
+        {@render fontFamilyEditor(meta.value.fontFamily, (fontFamily) => {
           updateMeta({
             value: {
               ...meta.value,
@@ -383,7 +522,7 @@
       <div class="form-group">
         <!-- svelte-ignore a11y_label_has_associated_control -->
         <label>Font Size</label>
-        {@render dimensionEditor(meta.value.fontSize, (fontSize: any) => {
+        {@render dimensionEditor(meta.value.fontSize, (fontSize) => {
           updateMeta({
             value: {
               ...meta.value,
@@ -396,7 +535,7 @@
       <div class="form-group">
         <!-- svelte-ignore a11y_label_has_associated_control -->
         <label>Font Weight</label>
-        {@render fontWeightEditor(meta.value.fontWeight, (fontWeight: any) => {
+        {@render fontWeightEditor(meta.value.fontWeight, (fontWeight) => {
           updateMeta({
             value: {
               ...meta.value,
@@ -432,17 +571,14 @@
       <div class="form-group">
         <!-- svelte-ignore a11y_label_has_associated_control -->
         <label>Letter Spacing</label>
-        {@render dimensionEditor(
-          meta.value.letterSpacing,
-          (letterSpacing: any) => {
-            updateMeta({
-              value: {
-                ...meta.value,
-                letterSpacing,
-              },
-            });
-          },
-        )}
+        {@render dimensionEditor(meta.value.letterSpacing, (letterSpacing) => {
+          updateMeta({
+            value: {
+              ...meta.value,
+              letterSpacing,
+            },
+          });
+        })}
       </div>
     {/if}
   </div>
