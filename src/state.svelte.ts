@@ -5,7 +5,7 @@ import type { Value } from "./schema";
 export type GroupMeta = {
   nodeType: "token-group";
   name: string;
-  type?: string;
+  type?: Value["type"];
   description?: string;
   deprecated?: boolean | string;
   extensions?: Record<string, unknown>;

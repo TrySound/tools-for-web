@@ -2,19 +2,28 @@
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { generateKeyBetween } from "fractional-indexing";
-  import { hotkeyKeyUX, hotkeyMacCompat, startKeyUX } from "keyux";
+  import {
+    focusGroupKeyUX,
+    hotkeyKeyUX,
+    hotkeyMacCompat,
+    startKeyUX,
+  } from "keyux";
   import stringify from "json-stringify-pretty-compact";
-  import { Plus, Settings, Trash2, Folder } from "@lucide/svelte";
+  import { Settings, Trash2, Folder } from "@lucide/svelte";
   import TreeView, { type TreeItem } from "./tree-view.svelte";
-  import { treeState, type TreeNodeMeta } from "./state.svelte";
   import Editor from "./editor.svelte";
+  import AddToken from "./add-token.svelte";
   import type { TreeNode } from "./store";
+  import { treeState, type TreeNodeMeta } from "./state.svelte";
   import { serializeDesignTokens } from "./tokens";
   import { generateCssVariables } from "./css-variables";
   import { serializeColor } from "./color";
 
   onMount(() => {
-    return startKeyUX(window, [hotkeyKeyUX([hotkeyMacCompat()])]);
+    return startKeyUX(window, [
+      hotkeyKeyUX([hotkeyMacCompat()]),
+      focusGroupKeyUX(),
+    ]);
   });
 
   const rootNodes = $derived(treeState.getChildren(undefined));
@@ -158,59 +167,7 @@
     selectedItems.add(newGroup.nodeId);
   };
 
-  const handleAddToken = () => {
-    let parentId: string | undefined;
-    let insertAfterIndex: undefined | string;
-    if (selectedItems.size === 0) {
-      // no selection: add to root at the end
-      parentId = undefined;
-      const rootChildren = treeState.getChildren(undefined);
-      const lastRootIndex = rootChildren.at(-1)?.index;
-      insertAfterIndex = generateKeyBetween(lastRootIndex ?? null, null);
-    } else {
-      const selectedArray = Array.from(selectedItems);
-      const selectedNode = treeState.getNode(selectedArray[0]);
-      // Single selection: add inside if it's a group, otherwise add after it
-      if (selectedNode?.meta.nodeType === "token-group") {
-        parentId = selectedNode.nodeId;
-        // Add at the end of the group
-        const children = treeState.getChildren(selectedNode.nodeId);
-        const lastChildIndex =
-          children.length > 0 ? children[children.length - 1].index : null;
-        insertAfterIndex = generateKeyBetween(lastChildIndex, null);
-      }
-      if (selectedNode?.meta.nodeType === "token") {
-        // add between selected item and the next sibling
-        const nextSibling = treeState.getNextSibling(selectedNode.nodeId);
-        parentId = selectedNode.parentId;
-        insertAfterIndex = generateKeyBetween(
-          selectedNode.index,
-          nextSibling?.index ?? null,
-        );
-      }
-    }
-    if (!insertAfterIndex) {
-      return;
-    }
-    // Create new token node with a default color value
-    const tokenNodeId = crypto.randomUUID();
-    const newToken: TreeNode<TreeNodeMeta> = {
-      nodeId: tokenNodeId,
-      parentId,
-      index: insertAfterIndex,
-      meta: {
-        nodeType: "token",
-        name: "New Token",
-        type: "color",
-        value: {
-          colorSpace: "srgb",
-          components: [0, 0, 0],
-        },
-      },
-    };
-    treeState.transact((tx) => {
-      tx.set(newToken);
-    });
+  const handleTokenAdded = (tokenNodeId: string) => {
     // select and open editor for the new token
     selectedItems.clear();
     selectedItems.add(tokenNodeId);
@@ -226,6 +183,15 @@
     }
     if (event.key === "Backspace") {
       handleDelete();
+    }
+    // when node editor is open -> hide
+    // otherwise remove selection
+    if (event.key === "Escape") {
+      if (editingMode) {
+        editingMode = false;
+      } else {
+        selectedItems.clear();
+      }
     }
   };
 
@@ -303,13 +269,7 @@
               <Folder size={20} />
             </button>
           {/if}
-          <button
-            class="button"
-            aria-label="Add token"
-            onclick={handleAddToken}
-          >
-            <Plus size={20} />
-          </button>
+          <AddToken {selectedItems} onTokenAdded={handleTokenAdded} />
         </div>
       </div>
 

@@ -44,6 +44,7 @@
     "simple-git-hooks": "^2.13.1",
     "svelte": "^5.41.3",
     "svelte-check": "^4.3.3",
+    "title-case": "^4.3.2",
     "typescript": "^5.9.3",
     "typescript-svelte-plugin": "^0.3.50",
     "vite": "^7.1.12",
