@@ -62,3 +62,27 @@ textarea.field {
   resize: none;
   max-height: 10lh;
 }
+
+/* expects icons 20px to keep button square */
+.button {
+  display: flex;
+  min-height: 32px;
+  padding: 0 6px;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+}

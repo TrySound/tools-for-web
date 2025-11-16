@@ -260,7 +260,7 @@
               <span class="dash-array-item-title">Dash {index + 1}</span>
               {#if strokeStyle.dashArray.length > 1}
                 <button
-                  class="remove-btn"
+                  class="button"
                   aria-label="Remove dash"
                   onclick={() => {
                     const updated = strokeStyle.dashArray.filter(
@@ -272,7 +272,7 @@
                     });
                   }}
                 >
-                  <X size={16} />
+                  <X size={20} />
                 </button>
               {/if}
             </div>
@@ -290,7 +290,7 @@
         {/each}
 
         <button
-          class="add-dash-btn"
+          class="button"
           onclick={() => {
             onChange({
               ...strokeStyle,
@@ -311,7 +311,7 @@
       {meta?.nodeType === "token-group" ? "Group" : "Token"}
     </h2>
     <button
-      class="close-btn"
+      class="button"
       aria-label="Close"
       aria-keyshortcuts="Escape"
       onclick={() => (editingMode = false)}
@@ -735,7 +735,7 @@
                 <span class="shadow-item-title">Shadow {index + 1}</span>
                 {#if shadows.length > 1}
                   <button
-                    class="remove-btn"
+                    class="button"
                     aria-label="Remove shadow"
                     onclick={() => {
                       const updated = shadows.filter((_, i) => i !== index);
@@ -854,7 +854,7 @@
           {/each}
 
           <button
-            class="add-shadow-btn"
+            class="button"
             onclick={() => {
               const newShadow: ShadowItem = {
                 color: {
@@ -978,25 +978,6 @@
     letter-spacing: 0.5px;
   }
 
-  .close-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: transparent;
-    border-radius: 4px;
-    color: var(--text-secondary);
-    transition: all 0.2s ease;
-    padding: 0;
-  }
-
-  .close-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
   .form-content {
     display: flex;
     flex-direction: column;
@@ -1102,26 +1083,6 @@
     letter-spacing: 0.5px;
   }
 
-  .remove-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border: none;
-    background: transparent;
-    border-radius: 3px;
-    color: var(--text-secondary);
-    transition: all 0.2s ease;
-    padding: 0;
-    cursor: pointer;
-  }
-
-  .remove-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
   .shadow-item-body {
     padding: 12px;
     display: flex;
@@ -1133,27 +1094,6 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
-  }
-
-  .add-shadow-btn {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 8px 12px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: 4px;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
   }
 
   .dash-array-list {
@@ -1189,26 +1129,5 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-  }
-
-  .add-dash-btn {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 8px 12px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: 4px;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
   }
 </style>

@@ -71,11 +71,11 @@
           <span class="gradient-stop-title">Stop {index + 1}</span>
           {#if value.length > 2}
             <button
-              class="remove-btn"
+              class="button"
               aria-label="Remove stop"
               onclick={() => handleRemoveStop(index)}
             >
-              <X size={16} />
+              <X size={20} />
             </button>
           {/if}
         </div>
@@ -145,8 +145,8 @@
       </div>
     {/each}
 
-    <button class="add-stop-btn" onclick={handleAddStop}>
-      <Plus /> Add Stop
+    <button class="button" onclick={handleAddStop}>
+      <Plus size={20} /> Add Stop
     </button>
   </div>
 </div>
@@ -192,26 +192,6 @@
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-  }
-
-  .remove-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border: none;
-    background: transparent;
-    border-radius: 3px;
-    color: var(--text-secondary);
-    transition: all 0.2s ease;
-    padding: 0;
-    cursor: pointer;
-  }
-
-  .remove-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
   }
 
   .gradient-stop-body {
@@ -283,26 +263,5 @@
     font-size: 14px;
     color: var(--text-secondary);
     min-width: 20px;
-  }
-
-  .add-stop-btn {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 8px 12px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: 4px;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .add-stop-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
   }
 </style>

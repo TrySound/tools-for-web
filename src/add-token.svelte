@@ -172,20 +172,20 @@
 <div class="token-type-menu-wrapper">
   {#if inheritedType}
     <button
-      class="add-token-btn"
+      class="button"
       aria-label="Add token"
       onclick={() => handleAddToken(inheritedType)}
     >
-      <Plus />
+      <Plus size={20} />
     </button>
   {:else}
     <button
-      class="add-token-btn"
+      class="button"
       aria-label="Add token"
       commandfor="app-add-token-menu"
       command="toggle-popover"
     >
-      <Plus />
+      <Plus size={20} />
     </button>
   {/if}
 
@@ -215,25 +215,6 @@
 <style>
   .token-type-menu-wrapper {
     position: relative;
-  }
-
-  .add-token-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: transparent;
-    border-radius: 4px;
-    color: var(--text-secondary);
-    transition: all 0.2s ease;
-    padding: 0;
-
-    &:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
   }
 
   .token-type-menu {

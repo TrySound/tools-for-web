@@ -478,25 +478,6 @@
     letter-spacing: 0.5px;
   }
 
-  .button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: transparent;
-    border-radius: 4px;
-    color: var(--text-secondary);
-    transition: all 0.2s ease;
-    padding: 0;
-
-    &:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-  }
-
   .tokens-container {
     overflow: auto;
   }
