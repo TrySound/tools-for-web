@@ -17,6 +17,7 @@
   import { treeState, type TreeNodeMeta } from "./state.svelte";
   import { serializeDesignTokens } from "./tokens";
   import { generateCssVariables } from "./css-variables";
+  import { generateStyleguide } from "./styleguide";
   import { serializeColor } from "./color";
 
   onMount(() => {
@@ -29,7 +30,7 @@
   const rootNodes = $derived(treeState.getChildren(undefined));
 
   let selectedItems = new SvelteSet<string>();
-  let outputMode = $state<"css" | "json">("css");
+  let outputMode = $state<"css" | "json" | "styleguide">("css");
   let editingMode = $state(false);
 
   const buildTreeItem = (node: TreeNode<TreeNodeMeta>): TreeItem => {
@@ -97,6 +98,7 @@
   const jsonOutput = $derived(
     stringify(serializeDesignTokens(allSelectedNodes)),
   );
+  const styleguideOutput = $derived(generateStyleguide(allSelectedNodes));
 
   const handleDelete = () => {
     if (selectedItems.size === 0) {
@@ -323,7 +325,11 @@
       {:else}
         <div class="panel-header">
           <h2 class="panel-title">
-            {outputMode === "css" ? "CSS Variables" : "Design Tokens JSON"}
+            {outputMode === "css"
+              ? "CSS Variables"
+              : outputMode === "json"
+                ? "Design Tokens JSON"
+                : "Styleguide"}
           </h2>
           <div class="output-mode-switcher">
             <button
@@ -342,14 +348,30 @@
             >
               JSON
             </button>
+            <button
+              class="mode-btn"
+              class:active={outputMode === "styleguide"}
+              aria-label="Show Styleguide"
+              onclick={() => (outputMode = "styleguide")}
+            >
+              Guide
+            </button>
           </div>
         </div>
 
-        <textarea
-          class="css-textarea"
-          readonly
-          value={outputMode === "css" ? cssOutput : jsonOutput}
-        ></textarea>
+        {#if outputMode === "styleguide"}
+          <iframe
+            title="Design Tokens Styleguide"
+            class="styleguide-iframe"
+            srcdoc={styleguideOutput}
+          ></iframe>
+        {:else}
+          <textarea
+            class="css-textarea"
+            readonly
+            value={outputMode === "css" ? cssOutput : jsonOutput}
+          ></textarea>
+        {/if}
       {/if}
     </main>
   </div>
@@ -549,6 +571,13 @@
   .css-textarea::placeholder {
     color: var(--text-secondary);
     opacity: 0.6;
+  }
+
+  /* Styleguide iframe */
+  .styleguide-iframe {
+    flex: 1;
+    border: none;
+    background: white;
   }
 
   /* Output mode switcher */

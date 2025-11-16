@@ -80,10 +80,14 @@ export const parseDesignTokens = (input: unknown): ParseResult => {
       recordError(serializedPath, `Invalid group name "${name}"`);
       return;
     }
+    const meta = getMeta(data);
     const groupMeta: GroupMeta = {
       nodeType: "token-group",
       name,
-      ...getMeta(data),
+      type: meta.type as GroupMeta["type"],
+      description: meta.description,
+      deprecated: meta.deprecated,
+      extensions: meta.extensions,
     };
     const nodeId = addNode(parentNodeId, groupMeta);
     for (const childName of Object.keys(data)) {
