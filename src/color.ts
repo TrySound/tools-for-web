@@ -1,5 +1,20 @@
-import Color from "colorjs.io";
+import * as colorjs from "colorjs.io/fn";
 import type { ColorValue } from "./schema";
+
+colorjs.ColorSpace.register(colorjs.sRGB);
+colorjs.ColorSpace.register(colorjs.sRGB_Linear);
+colorjs.ColorSpace.register(colorjs.HSL);
+colorjs.ColorSpace.register(colorjs.HWB);
+colorjs.ColorSpace.register(colorjs.Lab);
+colorjs.ColorSpace.register(colorjs.LCH);
+colorjs.ColorSpace.register(colorjs.OKLab);
+colorjs.ColorSpace.register(colorjs.OKLCH);
+colorjs.ColorSpace.register(colorjs.P3);
+colorjs.ColorSpace.register(colorjs.A98RGB);
+colorjs.ColorSpace.register(colorjs.ProPhoto);
+colorjs.ColorSpace.register(colorjs.REC_2020);
+colorjs.ColorSpace.register(colorjs.XYZ_D65);
+colorjs.ColorSpace.register(colorjs.XYZ_D50);
 
 /**
  * Converts hex color to 6-digit format
@@ -55,10 +70,10 @@ const colorSpaceBySpaceId = Object.fromEntries(
  */
 export const parseColor = (input: string): ColorValue => {
   try {
-    const color = new Color(input);
+    const color = colorjs.parse(input);
     const components = color.coords.map(getCoord);
     const hasNoneComponent = components.some((c) => c === "none");
-    const alphaCoord = getCoord(color.alpha);
+    const alphaCoord = getCoord(color.alpha ?? 1);
     const alpha = alphaCoord === "none" ? 1 : alphaCoord;
     const result: ColorValue = {
       colorSpace: colorSpaceBySpaceId[color.spaceId],
@@ -70,7 +85,9 @@ export const parseColor = (input: string): ColorValue => {
     }
     // For sRGB colors, add hex if fully opaque and no "none" components
     if (color.spaceId === "srgb" && !hasNoneComponent && alpha === 1) {
-      result.hex = expandHexTo6Digits(color.toString({ format: "hex" }));
+      result.hex = expandHexTo6Digits(
+        colorjs.serialize(color, { format: "hex" }),
+      );
     }
     return result;
   } catch {
@@ -90,12 +107,14 @@ export const parseColor = (input: string): ColorValue => {
 export const serializeColor = (colorValue: ColorValue): string => {
   try {
     const spaceId = spaceIdByColorSpace[colorValue.colorSpace];
-    const color = new Color(
-      spaceId,
-      colorValue.components as any,
-      colorValue.alpha,
+    return colorjs.serialize(
+      {
+        spaceId,
+        coords: colorValue.components as any,
+        alpha: colorValue.alpha,
+      },
+      { precision: 2 },
     );
-    return color.toString({ precision: 2 });
   } catch {
     // Fallback to transparent if serialization fails
     return "transparent";
