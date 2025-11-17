@@ -13,6 +13,7 @@
   import TreeView, { type TreeItem } from "./tree-view.svelte";
   import Editor from "./editor.svelte";
   import AddToken from "./add-token.svelte";
+  import AppMenu from "./app-menu.svelte";
   import Styleguide from "./styleguide.svelte";
   import type { TreeNode } from "./store";
   import { treeState, type TreeNodeMeta } from "./state.svelte";
@@ -228,6 +229,7 @@
     <!-- Left Panel: Design Tokens -->
     <aside class="panel left-panel">
       <div class="panel-header">
+        <AppMenu />
         <h2 class="panel-title">Design Tokens</h2>
         <div class="toolbar-actions">
           {#if selectedItems.size > 0}
@@ -387,20 +389,21 @@
 
   .panel-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
-    padding: 0 16px;
+    padding: 0 8px 0 12px;
     height: 48px;
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
     background: var(--bg-primary);
-    gap: 16px;
+    gap: 12px;
   }
 
   .toolbar-actions {
     display: flex;
     gap: 8px;
     align-items: center;
+    margin-left: auto;
   }
 
   .panel-title {

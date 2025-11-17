@@ -1,6 +1,7 @@
 export interface Transaction<Meta> {
   set: (node: TreeNode<Meta>) => void;
   delete: (nodeId: string) => void;
+  clear: () => void;
 }
 
 export interface TreeNode<Meta> {
@@ -34,6 +35,9 @@ export class TreeStore<Meta> {
       },
       delete: (nodeId): void => {
         this.#nodes.delete(nodeId);
+      },
+      clear: (): void => {
+        this.#nodes.clear();
       },
     });
     this.#notify();

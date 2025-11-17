@@ -219,7 +219,8 @@
 
   .token-type-menu {
     position-area: center bottom;
-    margin: 8px;
+    margin-inline: 0;
+    margin-block: 8px;
     min-width: 160px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
