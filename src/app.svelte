@@ -1,3 +1,9 @@
+<script module lang="ts">
+  import "@oddbird/popover-polyfill";
+  import "invokers-polyfill";
+  import "dialog-closedby-polyfill";
+</script>
+
 <script lang="ts">
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";

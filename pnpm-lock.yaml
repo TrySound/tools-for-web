@@ -17,6 +17,9 @@ importers:
       '@lucide/svelte':
         specifier: ^0.553.0
         version: 0.553.0(svelte@5.43.4)
+      '@oddbird/popover-polyfill':
+        specifier: ^0.6.1
+        version: 0.6.1
       '@sveltejs/vite-plugin-svelte':
         specifier: ^6.2.1
         version: 6.2.1(svelte@5.43.4)(vite@7.2.2)
@@ -29,9 +32,15 @@ importers:
       colorjs.io:
         specifier: ^0.5.2
         version: 0.5.2
+      dialog-closedby-polyfill:
+        specifier: ^1.1.0
+        version: 1.1.0
       fractional-indexing:
         specifier: ^3.2.0
         version: 3.2.0
+      invokers-polyfill:
+        specifier: ^0.5.7
+        version: 0.5.7
       json-stringify-pretty-compact:
         specifier: ^4.0.0
         version: 4.0.0
@@ -264,6 +273,9 @@ packages:
     peerDependencies:
       svelte: ^5
 
+  '@oddbird/popover-polyfill@0.6.1':
+    resolution: {integrity: sha512-Papau51NPG+NajXvoEHCNT1CBJv4WIyvIGfH5gpJPLL8MZJt/4giC0jJ/mNZRtJmdzRuXWpUFB6QxkJa1RvMAQ==}
+
   '@rollup/rollup-android-arm-eabi@4.53.0':
     resolution: {integrity: sha512-MX3DD/o2W36nlgQb8KA5QtUw/bK5aR9YDzNmX1PRHZAa6LF/MQCWMN477CgBMg8gH1vEiEZsjWRIZeL/7ttUVA==}
     cpu: [arm]
@@ -492,6 +504,9 @@ packages:
     resolution: {integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==}
     engines: {node: '>=0.10.0'}
 
+  dialog-closedby-polyfill@1.1.0:
+    resolution: {integrity: sha512-A/7THz1NUfErs+Dh+4mza2uRaNe4rD5PaXVSetEOTXF9kSwFanmwV0RjHRrojXjxPk54pwxX19njKMq246IIGA==}
+
   es-module-lexer@1.7.0:
     resolution: {integrity: sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==}
 
@@ -530,6 +545,9 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
+
+  invokers-polyfill@0.5.7:
+    resolution: {integrity: sha512-T1MmQ40+ARzC0W3YgyVUyncXIi1G7jnUq1PVdsYNr1ql7etYGHWNr3RKvJABIiFO5Ktk3xK9/A8+1lFASvcrKw==}
 
   is-reference@3.0.3:
     resolution: {integrity: sha512-ixkJoqQvAP88E6wLydLGGqCJsrFUnqoH6HnaczB8XmDH1oaWU+xxdptvikTgaEhtZ53Ky6YXiBuUI2WXLMCwjw==}
@@ -877,6 +895,8 @@ snapshots:
     dependencies:
       svelte: 5.43.4
 
+  '@oddbird/popover-polyfill@0.6.1': {}
+
   '@rollup/rollup-android-arm-eabi@4.53.0':
     optional: true
 
@@ -1050,6 +1070,8 @@ snapshots:
 
   deepmerge@4.3.1: {}
 
+  dialog-closedby-polyfill@1.1.0: {}
+
   es-module-lexer@1.7.0: {}
 
   esbuild@0.25.12:
@@ -1101,6 +1123,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  invokers-polyfill@0.5.7: {}
 
   is-reference@3.0.3:
     dependencies:
