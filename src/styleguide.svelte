@@ -1,7 +1,6 @@
 <script lang="ts">
-  import type { TreeNode } from "./store";
-  import type { TreeNodeMeta } from "./state.svelte";
-  import { treeState } from "./state.svelte";
+  import type { TokenMeta } from "./state.svelte";
+  import { treeState, resolveTokenValue } from "./state.svelte";
   import { serializeColor } from "./color";
   import type { StrokeStyleValue } from "./schema";
   import {
@@ -179,122 +178,118 @@
   </div>
 {/snippet}
 
-{#snippet tokenCard(token: TreeNode<TreeNodeMeta>)}
-  {#if token.meta.nodeType === "token"}
-    <div class="token-card">
-      <div class="token-name">{token.meta.name}</div>
-      <div class="token-type">{titleCase(noCase(token.meta.type))}</div>
+{#snippet tokenCard(tokenMeta: TokenMeta)}
+  {@const tokenValue = resolveTokenValue(tokenMeta, treeState.nodes())}
+  <div class="token-card">
+    <div class="token-name">{tokenMeta.name}</div>
+    <div class="token-type">{titleCase(noCase(tokenValue.type))}</div>
 
-      {#if token.meta.type === "color"}
-        {@const color = serializeColor(token.meta.value)}
-        <div class="color-preview" style="background: {color};"></div>
-        <div class="color-value">{color}</div>
-      {:else if token.meta.type === "dimension"}
-        <div class="dimension-value">
-          {toDimensionValue(token.meta.value)}
+    {#if tokenValue.type === "color"}
+      {@const color = serializeColor(tokenValue.value)}
+      <div class="color-preview" style="background: {color};"></div>
+      <div class="color-value">{color}</div>
+    {:else if tokenValue.type === "dimension"}
+      <div class="dimension-value">
+        {toDimensionValue(tokenValue.value)}
+      </div>
+    {:else if tokenValue.type === "duration"}
+      <div class="duration-value">
+        {toDurationValue(tokenValue.value)}
+      </div>
+    {:else if tokenValue.type === "number"}
+      <div class="number-value">{tokenValue.value}</div>
+    {:else if tokenValue.type === "fontFamily"}
+      {@const fontFamily = toFontFamily(tokenValue.value)}
+      <div class="font-family-preview" style="font-family: {fontFamily};">
+        Aa Bb Cc 123
+      </div>
+      <div class="typography-info">{fontFamily}</div>
+    {:else if tokenValue.type === "fontWeight"}
+      {@const weight = tokenValue.value}
+      <div class="font-weight-preview">
+        <div class="font-weight-sample" style="font-weight: {weight};">
+          Aa Bb Cc 123 (Weight: {weight})
         </div>
-      {:else if token.meta.type === "duration"}
-        <div class="duration-value">
-          {toDurationValue(token.meta.value)}
-        </div>
-      {:else if token.meta.type === "number"}
-        <div class="number-value">{token.meta.value}</div>
-      {:else if token.meta.type === "fontFamily"}
-        {@const fontFamily = toFontFamily(token.meta.value)}
-        <div class="font-family-preview" style="font-family: {fontFamily};">
-          Aa Bb Cc 123
-        </div>
-        <div class="typography-info">{fontFamily}</div>
-      {:else if token.meta.type === "fontWeight"}
-        {@const weight = token.meta.value}
-        <div class="font-weight-preview">
-          <div class="font-weight-sample" style="font-weight: {weight};">
-            Aa Bb Cc 123 (Weight: {weight})
-          </div>
-        </div>
-        <div class="typography-info">Weight: {token.meta.value}</div>
-      {:else if token.meta.type === "cubicBezier"}
-        {@const cb = token.meta.value}
-        <div class="cubic-bezier-preview">
-          {@render cubicBezierPreview(cb)}
-        </div>
-        <div class="typography-info">
-          {toCubicBezierValue(cb)}
-        </div>
-      {:else if token.meta.type === "transition"}
-        {@const transition = token.meta.value}
-        <div class="cubic-bezier-preview">
-          {@render cubicBezierPreview(transition.timingFunction)}
-        </div>
-        <div class="typography-info">
-          Duration: {toDurationValue(transition.duration)}<br />
-          Delay: {toDurationValue(transition.delay)}<br />
-          Timing: {toCubicBezierValue(transition.timingFunction)}
-        </div>
-      {:else if token.meta.type === "typography"}
-        {@const typo = token.meta.value}
-        {@const fontFamily = toFontFamily(typo.fontFamily)}
-        <div class="typography-preview">
-          <div
-            class="typography-sample"
-            style="
-              font-family: {fontFamily};
-              font-weight: {typo.fontWeight};
-              font-size: {toDimensionValue(typo.fontSize)};
-              line-height: {typo.lineHeight};
-              letter-spacing: {toDimensionValue(typo.letterSpacing)};"
-          >
-            Aa Bb Cc
-          </div>
-        </div>
-        <div class="typography-info">
-          Font: {fontFamily}<br />
-          Weight: {typo.fontWeight}<br />
-          Size: {toDimensionValue(typo.fontSize)}<br />
-          Line Height: {typo.lineHeight}<br />
-          Letter Spacing: {toDimensionValue(typo.letterSpacing)}
-        </div>
-      {:else if token.meta.type === "gradient"}
-        {@const gradient = toGradient(token.meta.value)}
-        <div class="gradient-preview" style="background: {gradient};"></div>
-        <div class="color-value">{gradient}</div>
-      {:else if token.meta.type === "shadow"}
-        {@const shadows = Array.isArray(token.meta.value)
-          ? token.meta.value
-          : [token.meta.value]}
+      </div>
+      <div class="typography-info">Weight: {tokenValue.value}</div>
+    {:else if tokenValue.type === "cubicBezier"}
+      <div class="cubic-bezier-preview">
+        {@render cubicBezierPreview(tokenValue.value)}
+      </div>
+      <div class="typography-info">
+        {toCubicBezierValue(tokenValue.value)}
+      </div>
+    {:else if tokenValue.type === "transition"}
+      {@const transition = tokenValue.value}
+      <div class="cubic-bezier-preview">
+        {@render cubicBezierPreview(transition.timingFunction)}
+      </div>
+      <div class="typography-info">
+        Duration: {toDurationValue(transition.duration)}<br />
+        Delay: {toDurationValue(transition.delay)}<br />
+        Timing: {toCubicBezierValue(transition.timingFunction)}
+      </div>
+    {:else if tokenValue.type === "typography"}
+      {@const typo = tokenValue.value}
+      {@const fontFamily = toFontFamily(typo.fontFamily)}
+      <div class="typography-preview">
         <div
-          class="shadow-preview"
-          style="box-shadow: {toShadow(token.meta.value)};"
-        ></div>
-        <div class="typography-info">{shadows.length} shadow(s)</div>
-      {:else if token.meta.type === "border"}
-        {@const border = token.meta.value}
-        {@const color = serializeColor(border.color)}
-        {@const style =
-          typeof border.style === "string" ? border.style : "solid"}
-        <div
-          class="border-preview"
-          style="border: {toDimensionValue(border.width)} {style} {color};"
+          class="typography-sample"
+          style="
+          font-family: {fontFamily};
+          font-weight: {typo.fontWeight};
+          font-size: {toDimensionValue(typo.fontSize)};
+          line-height: {typo.lineHeight};
+          letter-spacing: {toDimensionValue(typo.letterSpacing)};"
         >
-          Border
+          Aa Bb Cc
         </div>
-      {/if}
+      </div>
+      <div class="typography-info">
+        Font: {fontFamily}<br />
+        Weight: {typo.fontWeight}<br />
+        Size: {toDimensionValue(typo.fontSize)}<br />
+        Line Height: {typo.lineHeight}<br />
+        Letter Spacing: {toDimensionValue(typo.letterSpacing)}
+      </div>
+    {:else if tokenValue.type === "gradient"}
+      {@const gradient = toGradient(tokenValue.value)}
+      <div class="gradient-preview" style="background: {gradient};"></div>
+      <div class="color-value">{gradient}</div>
+    {:else if tokenValue.type === "shadow"}
+      {@const shadows = Array.isArray(tokenValue.value)
+        ? tokenValue.value
+        : [tokenValue.value]}
+      <div
+        class="shadow-preview"
+        style="box-shadow: {toShadow(tokenValue.value)};"
+      ></div>
+      <div class="typography-info">{shadows.length} shadow(s)</div>
+    {:else if tokenValue.type === "border"}
+      {@const border = tokenValue.value}
+      {@const color = serializeColor(border.color)}
+      {@const style = typeof border.style === "string" ? border.style : "solid"}
+      <div
+        class="border-preview"
+        style="border: {toDimensionValue(border.width)} {style} {color};"
+      >
+        Border
+      </div>
+    {:else if tokenValue.type === "strokeStyle"}
+      {@render strokeStylePreview(tokenValue.value)}
+    {/if}
 
-      {#if token.meta.type === "strokeStyle"}
-        {@render strokeStylePreview(token.meta.value)}
-      {/if}
-      {#if token.meta.description}
-        <div class="token-description">{token.meta.description}</div>
-      {/if}
-      {#if token.meta.deprecated}
-        {@const reason =
-          typeof token.meta.deprecated === "string"
-            ? `: ${token.meta.deprecated}`
-            : ""}
-        <div class="token-deprecated">Deprecated{reason}</div>
-      {/if}
-    </div>
-  {/if}
+    {#if tokenMeta.description}
+      <div class="token-description">{tokenMeta.description}</div>
+    {/if}
+    {#if tokenMeta.deprecated}
+      {@const reason =
+        typeof tokenMeta.deprecated === "string"
+          ? `: ${tokenMeta.deprecated}`
+          : ""}
+      <div class="token-deprecated">Deprecated{reason}</div>
+    {/if}
+  </div>
 {/snippet}
 
 {#snippet renderNodes(parentId: string | undefined, depth: number)}
@@ -320,8 +315,10 @@
   {/each}
   {#if tokens.length > 0}
     <div class="token-grid">
-      {#each tokens as token (token.nodeId)}
-        {@render tokenCard(token)}
+      {#each tokens as node (node.nodeId)}
+        {#if node.meta.nodeType === "token"}
+          {@render tokenCard(node.meta)}
+        {/if}
       {/each}
     </div>
   {/if}

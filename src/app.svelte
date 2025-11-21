@@ -22,7 +22,11 @@
   import AppMenu from "./app-menu.svelte";
   import Styleguide from "./styleguide.svelte";
   import type { TreeNode } from "./store";
-  import { treeState, type TreeNodeMeta } from "./state.svelte";
+  import {
+    resolveTokenValue,
+    treeState,
+    type TreeNodeMeta,
+  } from "./state.svelte";
   import { serializeDesignTokens } from "./tokens";
   import { generateCssVariables } from "./css-variables";
   import { serializeColor } from "./color";
@@ -261,11 +265,14 @@
       {#snippet renderTreeItem(item: TreeItem)}
         {@const meta = treeState.getNode(item.id)?.meta}
         <div class="token">
-          {#if meta?.nodeType === "token" && meta?.type === "color"}
-            <div
-              class="token-preview"
-              style="background: {serializeColor(meta.value)};"
-            ></div>
+          {#if meta?.nodeType === "token"}
+            {@const tokenValue = resolveTokenValue(meta, treeState.nodes())}
+            {#if tokenValue.type === "color"}
+              <div
+                class="token-preview"
+                style="background: {serializeColor(tokenValue.value)};"
+              ></div>
+            {/if}
           {/if}
           <span class="token-name">{item.name}</span>
           {#if meta?.type}

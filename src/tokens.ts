@@ -1,7 +1,7 @@
 import { generateKeyBetween } from "fractional-indexing";
 import { compareTreeNodes, type TreeNode } from "./store";
 import type { GroupMeta, TokenMeta } from "./state.svelte";
-import { ValueSchema } from "./schema";
+import { ValueSchema, type Value } from "./schema";
 
 type TreeNodeMeta = GroupMeta | TokenMeta;
 
@@ -16,7 +16,7 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
 const isTokenObject = (v: unknown): v is Record<string, unknown> =>
-  isObject(v) && "$value" in v;
+  isObject(v) && ("$value" in v || "$extends" in v);
 
 const isValidGroupName = (name: string) => {
   if (name.startsWith("$")) {
@@ -31,6 +31,16 @@ const isValidTokenName = (name: string) => {
     return true;
   }
   return isValidGroupName(name);
+};
+
+const isTokenReference = (value: unknown): value is string => {
+  if (typeof value !== "string") {
+    return false;
+  }
+  // Check if value matches the reference syntax: {group.token} or {group.nested.token}
+  return /^\{[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*\}$/.test(
+    value,
+  );
 };
 
 const getMeta = (data: Record<string, unknown>) => {
@@ -124,11 +134,47 @@ export const parseDesignTokens = (input: unknown): ParseResult => {
       deprecated,
       extensions,
     } = getMeta(obj);
+
+    // Check for $extends property (group extension)
+    const extendsValue =
+      typeof (obj as any).$extends === "string"
+        ? (obj as any).$extends
+        : undefined;
+
+    if (extendsValue) {
+      // Token is an alias via $extends, no need for type or value
+      addNode(parentNodeId, {
+        nodeType: "token",
+        name,
+        ...(type && { type: type as Value["type"] }),
+        extends: extendsValue,
+        description,
+        deprecated,
+        extensions,
+      } as any);
+      return;
+    }
+
     if (!type) {
       recordError(serializedPath, "Token type cannot be determined");
       return;
     }
     const value = (obj as any).$value;
+
+    // Check if value is a token reference (curly brace syntax in $value)
+    if (isTokenReference(value)) {
+      addNode(parentNodeId, {
+        nodeType: "token",
+        name,
+        description,
+        deprecated,
+        extensions,
+        type: type as Value["type"],
+        extends: value,
+      });
+      return;
+    }
+
     const parsed = ValueSchema.safeParse({
       type,
       value,
@@ -210,9 +256,26 @@ export const serializeDesignTokens = (
 
     if (meta.nodeType === "token") {
       // Token node
-      const token: Record<string, unknown> = {
-        $value: meta.value,
-      };
+      const token: Record<string, unknown> = {};
+      const tokenMeta = meta as any;
+
+      // Check if this is an alias token (with extends)
+      if (tokenMeta.extends) {
+        // Determine if this is a token reference (with dots) or group extension
+        // Token references: {group.token} or {group.nested.token}
+        // Group extensions: {group} (single level, no dots)
+        const isTokenReference = tokenMeta.extends.includes(".");
+        if (isTokenReference) {
+          // Token reference goes in $value
+          token.$value = tokenMeta.extends;
+        } else {
+          // Group extension goes in $extends
+          token.$extends = tokenMeta.extends;
+        }
+      } else if (tokenMeta.value !== undefined) {
+        token.$value = tokenMeta.value;
+      }
+
       // Only include $type if it's different from parent type
       // make token inherit type from group
       if (meta.type && meta.type !== parentType) {

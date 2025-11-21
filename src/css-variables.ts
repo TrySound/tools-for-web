@@ -1,6 +1,7 @@
 import { kebabCase } from "change-case";
 import { compareTreeNodes, type TreeNode } from "./store";
 import type { TreeNodeMeta } from "./state.svelte";
+import { resolveTokenValue } from "./state.svelte";
 import { serializeColor } from "./color";
 import type {
   BorderValue,
@@ -13,6 +14,7 @@ import type {
   StrokeStyleValue,
   TransitionValue,
   TypographyValue,
+  Value,
 } from "./schema";
 
 // https://www.designtokens.org/tr/2025.10/color
@@ -114,60 +116,69 @@ const processNode = (
   node: TreeNode<TreeNodeMeta>,
   path: string[],
   childrenByParent: Map<string | undefined, TreeNode<TreeNodeMeta>[]>,
+  allNodes: Map<string, TreeNode<TreeNodeMeta>>,
   cssLines: string[],
 ) => {
   // group is only added to variable name
   if (node.meta.nodeType === "token-group") {
     const children = childrenByParent.get(node.nodeId) ?? [];
     for (const child of children) {
-      processNode(child, [...path, node.meta.name], childrenByParent, cssLines);
+      processNode(
+        child,
+        [...path, node.meta.name],
+        childrenByParent,
+        allNodes,
+        cssLines,
+      );
     }
   }
 
   if (node.meta.nodeType === "token") {
+    const tokenValue = resolveTokenValue(node.meta, allNodes);
     const varName = `--${kebabCase([...path, node.meta.name].join("-"))}`;
-    switch (node.meta.type) {
+    switch (tokenValue.type) {
       case "color":
-        cssLines.push(`  ${varName}: ${serializeColor(node.meta.value)};`);
+        cssLines.push(`  ${varName}: ${serializeColor(tokenValue.value)};`);
         break;
       case "dimension":
-        cssLines.push(`  ${varName}: ${toDimensionValue(node.meta.value)};`);
+        cssLines.push(`  ${varName}: ${toDimensionValue(tokenValue.value)};`);
         break;
       case "duration":
-        cssLines.push(`  ${varName}: ${toDurationValue(node.meta.value)};`);
+        cssLines.push(`  ${varName}: ${toDurationValue(tokenValue.value)};`);
         break;
       case "cubicBezier":
-        cssLines.push(`  ${varName}: ${toCubicBezierValue(node.meta.value)};`);
+        cssLines.push(`  ${varName}: ${toCubicBezierValue(tokenValue.value)};`);
         break;
       case "number":
-        cssLines.push(`  ${varName}: ${node.meta.value};`);
+        cssLines.push(`  ${varName}: ${tokenValue.value};`);
         break;
       case "fontFamily":
-        cssLines.push(`  ${varName}: ${toFontFamily(node.meta.value)};`);
+        cssLines.push(`  ${varName}: ${toFontFamily(tokenValue.value)};`);
         break;
       case "fontWeight":
-        cssLines.push(`  ${varName}: ${node.meta.value};`);
+        cssLines.push(`  ${varName}: ${tokenValue.value};`);
         break;
       case "shadow":
-        cssLines.push(`  ${varName}: ${toShadow(node.meta.value)};`);
+        cssLines.push(`  ${varName}: ${toShadow(tokenValue.value)};`);
         break;
       case "gradient":
-        cssLines.push(`  ${varName}: ${toGradient(node.meta.value)};`);
+        cssLines.push(`  ${varName}: ${toGradient(tokenValue.value)};`);
         break;
       case "transition":
-        addTransition(varName, node.meta.value, cssLines);
+        addTransition(varName, tokenValue.value, cssLines);
         break;
       case "strokeStyle":
-        addStrokeStyle(varName, node.meta.value, cssLines);
+        addStrokeStyle(varName, tokenValue.value, cssLines);
         break;
       case "border":
-        addBorder(varName, node.meta.value, cssLines);
+        addBorder(varName, tokenValue.value, cssLines);
         break;
       case "typography":
-        addTypography(varName, node.meta.value, cssLines);
+        addTypography(varName, tokenValue.value, cssLines);
         break;
       default:
-        node.meta satisfies never;
+        tokenValue satisfies never;
+        break;
     }
   }
 };
@@ -193,7 +204,7 @@ export const generateCssVariables = (
   cssLines.push(":root {");
   const rootChildren = childrenByParent.get(undefined) ?? [];
   for (const node of rootChildren) {
-    processNode(node, [], childrenByParent, cssLines);
+    processNode(node, [], childrenByParent, nodes, cssLines);
   }
   cssLines.push("}");
   return cssLines.join("\n");

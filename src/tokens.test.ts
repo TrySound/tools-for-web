@@ -1035,4 +1035,81 @@ describe("serializeDesignTokens", () => {
     const serialized = serializeDesignTokens(nodesToMap(parsed.nodes));
     expect(serialized).toEqual(input);
   });
+
+  test("parses token with $value containing reference", () => {
+    const result = parseDesignTokens({
+      colors: {
+        $type: "color",
+        primary: {
+          $value: { colorSpace: "srgb", components: [0, 0.4, 0.8] },
+        },
+      },
+      semantic: {
+        brand: {
+          $type: "color",
+          $value: "{colors.primary}",
+        },
+      },
+    });
+    expect(result.errors).toHaveLength(0);
+    expect(result.nodes).toHaveLength(4);
+    const brandToken = result.nodes.find(
+      (n) => n.meta.nodeType === "token" && n.meta.name === "brand",
+    );
+    expect(brandToken?.meta).toEqual(
+      expect.objectContaining({
+        nodeType: "token",
+        name: "brand",
+        type: "color",
+        extends: "{colors.primary}",
+      }),
+    );
+  });
+
+  test("serializes token with $value containing reference", () => {
+    const input = {
+      colors: {
+        $type: "color",
+        primary: {
+          $value: { colorSpace: "srgb", components: [0, 0.4, 0.8] },
+        },
+      },
+      semantic: {
+        brand: {
+          $type: "color",
+          $value: "{colors.primary}",
+        },
+      },
+    };
+    const parsed = parseDesignTokens(input);
+    const serialized = serializeDesignTokens(nodesToMap(parsed.nodes));
+    expect(serialized).toEqual(input);
+  });
+
+  test("round-trip preserves $value with reference", () => {
+    const input = {
+      base: {
+        $type: "color",
+        primary: {
+          $value: { colorSpace: "srgb", components: [0, 0.4, 0.8] },
+          $description: "Base primary color",
+        },
+      },
+      semantic: {
+        $type: "color",
+        success: {
+          $value: "{base.primary}",
+          $description: "Success state color",
+        },
+        error: {
+          $value: { colorSpace: "srgb", components: [1, 0, 0] },
+          $description: "Error state color",
+        },
+      },
+    };
+    const parsed = parseDesignTokens(input);
+    expect(parsed.errors).toHaveLength(0);
+    const serialized = serializeDesignTokens(nodesToMap(parsed.nodes));
+    expect(serialized).toEqual(input);
+  });
 });
