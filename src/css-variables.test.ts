@@ -1,6 +1,7 @@
 import { test, expect, describe } from "vitest";
 import { generateCssVariables, parseCssVariables } from "./css-variables";
 import { parseDesignTokens } from "./tokens";
+import { parseTokenResolver } from "./resolver";
 import type { TreeNode } from "./store";
 import type { TreeNodeMeta } from "./state.svelte";
 
@@ -1110,5 +1111,161 @@ describe("parseCssVariables", () => {
     ).toEqual({
       value: { $type: "number", $value: 42 },
     });
+  });
+});
+
+describe("generateCssVariables with modifiers and contexts", () => {
+  test("skips modifier nodes and their entire subtrees", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "base",
+          sources: [
+            {
+              baseColor: {
+                $type: "color",
+                $value: { colorSpace: "srgb", components: [1, 0, 0] },
+              },
+            },
+          ],
+        },
+        {
+          type: "modifier",
+          name: "theme",
+          description: "Color theme",
+          contexts: {
+            light: [
+              {
+                primary: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [0, 0, 1] },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const css = generateCssVariables(nodesToMap(result.nodes));
+
+    // Should contain token from set
+    expect(css).toContain("--base-color: rgb(100% 0% 0%);");
+
+    // Should NOT contain token from modifier's context (entire subtree skipped)
+    expect(css).not.toContain("--primary:");
+    expect(css).not.toContain("theme");
+    expect(css).not.toContain("light");
+  });
+
+  test("skips tokens in all modifier contexts", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            light: [
+              {
+                background: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [1, 1, 1] },
+                },
+              },
+            ],
+            dark: [
+              {
+                background: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const css = generateCssVariables(nodesToMap(result.nodes));
+
+    // Should NOT contain background token from any context
+    expect(css).toContain(":root {\n}");
+  });
+
+  test("skips nested groups and tokens under modifier contexts", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "contrast",
+          contexts: {
+            high: [
+              {
+                colors: {
+                  $type: "color",
+                  text: {
+                    $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const css = generateCssVariables(nodesToMap(result.nodes));
+
+    // Should NOT contain any token from modifier context (entire subtree skipped)
+    expect(css).toContain(":root {\n}");
+  });
+
+  test("skips tokens from multiple modifiers", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            light: [
+              {
+                background: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [1, 1, 1] },
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: "modifier",
+          name: "contrast",
+          contexts: {
+            high: [
+              {
+                text: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const css = generateCssVariables(nodesToMap(result.nodes));
+
+    // Should NOT contain tokens from any modifier
+    expect(css).toContain(":root {\n}");
   });
 });

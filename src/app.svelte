@@ -69,7 +69,12 @@
     ]);
   });
 
-  const rootNodes = $derived(treeState.getChildren(undefined));
+  const rootNodes = $derived(
+    treeState
+      .getChildren(undefined)
+      // @todo temporary render only token-set
+      .filter((item) => item.meta.nodeType === "token-set"),
+  );
 
   // svelte-ignore state_referenced_locally
   let selectedItems = new SvelteSet<string>(

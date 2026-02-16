@@ -1,6 +1,7 @@
 import { test, expect, describe } from "vitest";
 import { generateScssVariables } from "./scss";
 import { parseDesignTokens } from "./tokens";
+import { parseTokenResolver } from "./resolver";
 import type { TreeNode } from "./store";
 import type { TreeNodeMeta } from "./state.svelte";
 
@@ -578,5 +579,117 @@ describe("generateScssVariables", () => {
     expect(scss).toContain(
       "$typography-body: $weights-normal $sizes-base/1.5 $fonts-body",
     );
+  });
+
+  test("skips modifier nodes and their entire subtrees", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "base",
+          sources: [
+            {
+              baseColor: {
+                $type: "color",
+                $value: { colorSpace: "srgb", components: [1, 0, 0] },
+              },
+            },
+          ],
+        },
+        {
+          type: "modifier",
+          name: "theme",
+          description: "Color theme",
+          contexts: {
+            light: [
+              {
+                primary: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [0, 0, 1] },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const scss = generateScssVariables(nodesToMap(result.nodes));
+
+    // Should contain token from set
+    expect(scss).toContain("$base-color: rgb(100% 0% 0%);");
+
+    // Should NOT contain token from modifier's context (entire subtree skipped)
+    expect(scss).not.toContain("$primary:");
+    expect(scss).not.toContain("theme");
+    expect(scss).not.toContain("light");
+  });
+
+  test("skips tokens in all modifier contexts", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            light: [
+              {
+                background: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [1, 1, 1] },
+                },
+              },
+            ],
+            dark: [
+              {
+                background: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const scss = generateScssVariables(nodesToMap(result.nodes));
+
+    // Should NOT contain background token from any context
+    expect(scss).toBe("");
+  });
+
+  test("skips nested groups and tokens under modifier contexts", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "contrast",
+          contexts: {
+            high: [
+              {
+                colors: {
+                  $type: "color",
+                  text: {
+                    $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const scss = generateScssVariables(nodesToMap(result.nodes));
+
+    // Should NOT contain any token from modifier context (entire subtree skipped)
+    expect(scss).toBe("");
   });
 });
