@@ -1115,15 +1115,6 @@ describe("parseCssVariables", () => {
 });
 
 describe("generateCssVariables with modifiers and contexts", () => {
-  // Helper to convert array to Map
-  const nodesToMap = (nodes: TreeNode<TreeNodeMeta>[]) => {
-    const map = new Map<string, TreeNode<TreeNodeMeta>>();
-    for (const node of nodes) {
-      map.set(node.nodeId, node);
-    }
-    return map;
-  };
-
   test("skips modifier nodes and their entire subtrees", () => {
     const result = parseTokenResolver({
       version: "2025.10",
