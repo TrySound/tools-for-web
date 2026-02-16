@@ -69,7 +69,12 @@
     ]);
   });
 
-  const rootNodes = $derived(treeState.getChildren(undefined));
+  const rootNodes = $derived(
+    treeState
+      .getChildren(undefined)
+      // @todo temporary render only token-set
+      .filter((item) => item.meta.nodeType === "token-set"),
+  );
 
   // svelte-ignore state_referenced_locally
   let selectedItems = new SvelteSet<string>(
@@ -86,12 +91,7 @@
     };
   };
 
-  const treeData = $derived(
-    rootNodes
-      // @todo temporary render only token-set
-      .filter((item) => item.meta.nodeType === "token-set")
-      .map(buildTreeItem),
-  );
+  const treeData = $derived(rootNodes.map(buildTreeItem));
   const expandedItems = new SvelteSet(
     // svelte-ignore state_referenced_locally
     rootNodes.length ? [rootNodes[0].nodeId] : [],
