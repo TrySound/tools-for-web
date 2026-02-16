@@ -34,6 +34,21 @@ export type TokenMeta = {
   extensions?: Record<string, unknown>;
 } & RawValueWithReference;
 
+export type ModifierMeta = {
+  nodeType: "token-modifier";
+  name: string;
+  description?: string;
+  default?: NodeRef;
+  extensions?: Record<string, unknown>;
+};
+
+export type ContextMeta = {
+  nodeType: "token-context";
+  name: string;
+  description?: string;
+  extensions?: Record<string, unknown>;
+};
+
 /**
  * Helper function to find the type of a token
  * Searches through reference chain or parent group hierarchy
@@ -42,8 +57,12 @@ export const findTokenType = (
   node: TreeNode<TreeNodeMeta>,
   nodes: Map<string, TreeNode<TreeNodeMeta>>,
 ): Value["type"] | undefined => {
-  // Token-set nodes don't have types
-  if (node.meta.nodeType === "token-set") {
+  // Node types without explicit types (no $type inheritance)
+  if (
+    node.meta.nodeType === "token-set" ||
+    node.meta.nodeType === "token-modifier" ||
+    node.meta.nodeType === "token-context"
+  ) {
     return;
   }
   // If token has explicit type, use it
@@ -327,7 +346,12 @@ export const isAliasCircular = (
   return false; // No circular dependency
 };
 
-export type TreeNodeMeta = GroupMeta | TokenMeta | SetMeta;
+export type TreeNodeMeta =
+  | GroupMeta
+  | TokenMeta
+  | SetMeta
+  | ModifierMeta
+  | ContextMeta;
 
 export class TreeState<Meta> {
   #store = new TreeStore<Meta>();

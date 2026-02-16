@@ -184,8 +184,16 @@ const processNode = (
   lines: string[],
   nodes: Map<string, TreeNode<TreeNodeMeta>>,
 ) => {
+  // token-modifier and token-context nodes and their entire subtrees should be skipped
+  if (
+    node.meta.nodeType === "token-modifier" ||
+    node.meta.nodeType === "token-context"
+  ) {
+    return;
+  }
+
   // token-set is intended for grouping globals
-  // and should be omitted in generated variables
+  // and should be omitted in generated variables, but its children are processed
   if (node.meta.nodeType === "token-set") {
     const children = childrenByParent.get(node.nodeId) ?? [];
     for (const child of children) {

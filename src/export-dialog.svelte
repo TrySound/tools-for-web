@@ -17,7 +17,11 @@
     // remove set node from data and serialize as DTCG format module
     const setIds = new Set<undefined | string>();
     for (const node of nodes.values()) {
-      if (node.meta.nodeType === "token-set") {
+      if (
+        node.meta.nodeType === "token-set" ||
+        node.meta.nodeType === "token-modifier" ||
+        node.meta.nodeType === "token-context"
+      ) {
         setIds.add(node.nodeId);
       } else {
         filteredNodes.set(node.nodeId, node as TreeNode<TokenMeta | GroupMeta>);

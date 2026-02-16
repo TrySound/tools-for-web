@@ -1104,7 +1104,7 @@ describe("serializeTokenResolver", () => {
     expect(parseResult2.errors).toHaveLength(0);
   });
 
-  test("skips modifier items and serializes only sets", () => {
+  test("serializes both sets and modifiers in resolutionOrder", () => {
     const resolver = parseTokenResolver({
       version: "2025.10",
       resolutionOrder: [
@@ -1136,9 +1136,12 @@ describe("serializeTokenResolver", () => {
     const nodes = new Map(resolver.nodes.map((n) => [n.nodeId, n]));
     const document = serializeTokenResolver(nodes);
 
-    // Should only have the Base set, modifier is skipped
-    expect(document.resolutionOrder).toHaveLength(1);
+    // Should have both Base set and Theme modifier
+    expect(document.resolutionOrder).toHaveLength(2);
     expect(document.resolutionOrder[0].name).toBe("Base");
+    expect(document.resolutionOrder[0].type).toBe("set");
+    expect(document.resolutionOrder[1].name).toBe("Theme");
+    expect(document.resolutionOrder[1].type).toBe("modifier");
   });
 });
 
@@ -1620,5 +1623,517 @@ describe("cross-set aliases", () => {
         new Map(result.nodes.map((node) => [node.nodeId, node])),
       ),
     ).toEqual(original);
+  });
+
+  test("parses simple modifier with contexts", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            light: [
+              {
+                color: {
+                  text: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                  },
+                },
+              },
+            ],
+            dark: [
+              {
+                color: {
+                  text: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [1, 1, 1] },
+                  },
+                },
+              },
+            ],
+          },
+          default: "light",
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+
+    // Should have modifier node and context nodes
+    const modifierNode = result.nodes.find(
+      (n) => n.meta.nodeType === "token-modifier",
+    );
+    expect(modifierNode).toBeDefined();
+    expect(modifierNode?.meta.name).toBe("theme");
+
+    // Should have 2 context nodes (light and dark)
+    const contextNodes = result.nodes.filter(
+      (n) => n.meta.nodeType === "token-context",
+    );
+    expect(contextNodes).toHaveLength(2);
+    expect(contextNodes.map((n) => n.meta.name).sort()).toEqual([
+      "dark",
+      "light",
+    ]);
+
+    // Contexts should have modifier as parent
+    contextNodes.forEach((context) => {
+      expect(context.parentId).toBe(modifierNode?.nodeId);
+    });
+
+    // Default should be NodeRef pointing to light context
+    if (modifierNode?.meta.nodeType === "token-modifier") {
+      const modifierMeta = modifierNode.meta;
+      expect(modifierMeta.default).toBeDefined();
+      const defaultNode = result.nodes.find(
+        (n) =>
+          n.nodeId === modifierMeta.default?.ref &&
+          n.meta.nodeType === "token-context",
+      );
+      expect(defaultNode?.meta.name).toBe("light");
+    }
+  });
+
+  test("parses modifier contexts with multiple sources", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "contrast",
+          contexts: {
+            normal: [
+              {
+                color: {
+                  text: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [0.2, 0.2, 0.2] },
+                  },
+                },
+              },
+            ],
+            high: [
+              {
+                color: {
+                  text: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                  },
+                },
+              },
+              {
+                color: {
+                  text: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                  }, // Override - last wins
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+
+    // Modifier and contexts should exist
+    const modifierNode = result.nodes.find(
+      (n) => n.meta.nodeType === "token-modifier",
+    );
+    expect(modifierNode).toBeDefined();
+
+    const contextNodes = result.nodes.filter(
+      (n) => n.meta.nodeType === "token-context",
+    );
+    expect(contextNodes).toHaveLength(2);
+  });
+
+  test("serializes modifier back to original format", () => {
+    const original = {
+      version: "2025.10" as const,
+      resolutionOrder: [
+        {
+          type: "modifier" as const,
+          name: "theme",
+          contexts: {
+            light: [
+              {
+                color: {
+                  primary: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [1, 0, 0] },
+                  },
+                },
+              },
+            ],
+            dark: [
+              {
+                color: {
+                  primary: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                  },
+                },
+              },
+            ],
+          },
+          default: "light",
+        },
+      ],
+    };
+
+    const result = parseTokenResolver(original);
+    expect(result.errors).toHaveLength(0);
+
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+
+    expect(serialized).toEqual(original);
+  });
+
+  test("preserves modifier description and extensions", () => {
+    const original = {
+      version: "2025.10" as const,
+      resolutionOrder: [
+        {
+          type: "modifier" as const,
+          name: "theme",
+          description: "Color theme switcher",
+          contexts: {
+            light: [
+              {
+                color: {
+                  bg: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [1, 1, 1] },
+                  },
+                },
+              },
+            ],
+            dark: [
+              {
+                color: {
+                  bg: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                  },
+                },
+              },
+            ],
+          },
+          $extensions: {
+            "figma.com": {
+              updatedAt: "2025-01-27",
+            },
+          },
+        },
+      ],
+    };
+
+    const result = parseTokenResolver(original);
+    expect(result.errors).toHaveLength(0);
+
+    const modifierNode = result.nodes.find(
+      (n) => n.meta.nodeType === "token-modifier",
+    );
+    expect(modifierNode?.meta.description).toBe("Color theme switcher");
+    expect(modifierNode?.meta.extensions).toEqual({
+      "figma.com": {
+        updatedAt: "2025-01-27",
+      },
+    });
+
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+    expect(serialized).toEqual(original);
+  });
+
+  test("tokens under context are re-parented to context node", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            light: [
+              {
+                colors: {
+                  primary: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [1, 0, 0] },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+
+    const contextNode = result.nodes.find(
+      (n) => n.meta.nodeType === "token-context",
+    );
+    expect(contextNode).toBeDefined();
+
+    // Find token under context
+    const tokenNode = result.nodes.find(
+      (n) => n.meta.nodeType === "token" && n.meta.name === "primary",
+    );
+    expect(tokenNode).toBeDefined();
+
+    // Token should have context as ancestor
+    let currentNode = tokenNode;
+    while (currentNode?.parentId) {
+      currentNode = result.nodes.find(
+        (n) => n.nodeId === currentNode?.parentId,
+      );
+      if (currentNode?.meta.nodeType === "token-context") {
+        expect(currentNode.nodeId).toBe(contextNode?.nodeId);
+        return;
+      }
+    }
+    throw new Error("Token should have context as ancestor");
+  });
+});
+
+describe("modifier isolation - modifiers should not pollute global namespace", () => {
+  test("modifier can reference global set tokens", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "Foundation",
+          sources: [
+            {
+              colors: {
+                primary: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [0, 0, 1] },
+                },
+              },
+            },
+          ],
+        },
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            dark: [
+              {
+                colors: {
+                  background: {
+                    $type: "color",
+                    $value: "{colors.primary}",
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+
+    // Find the background token in the dark context
+    const backgroundToken = result.nodes.find(
+      (n) => n.meta.nodeType === "token" && n.meta.name === "background",
+    );
+    expect(backgroundToken).toBeDefined();
+    if (backgroundToken && backgroundToken.meta.nodeType === "token") {
+      // Should reference the primary token from Foundation set
+      expect(backgroundToken.meta.value).toHaveProperty("ref");
+    }
+  });
+
+  test("modifier can reference own context tokens", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            dark: [
+              {
+                colors: {
+                  primary: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [0, 0, 1] },
+                  },
+                  background: {
+                    $type: "color",
+                    $value: "{colors.primary}",
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+
+    // Find the background token
+    const backgroundToken = result.nodes.find(
+      (n) => n.meta.nodeType === "token" && n.meta.name === "background",
+    );
+    expect(backgroundToken).toBeDefined();
+    if (backgroundToken && backgroundToken.meta.nodeType === "token") {
+      // Should reference the primary token from the same context
+      expect(backgroundToken.meta.value).toHaveProperty("ref");
+    }
+  });
+
+  test("modifier cannot reference tokens from other modifiers", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            dark: [
+              {
+                colors: {
+                  primary: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [0, 0, 1] },
+                  },
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: "modifier",
+          name: "contrast",
+          contexts: {
+            high: [
+              {
+                colors: {
+                  // This tries to reference a token from the 'theme' modifier
+                  // which should fail because modifiers don't pollute global space
+                  background: {
+                    $type: "color",
+                    $value: "{colors.primary}",
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    // Should have an error because the reference cannot be resolved
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(
+      result.errors.some(
+        (e) => e.path.includes("background") || e.message.includes("not found"),
+      ),
+    ).toBe(true);
+  });
+
+  test("set cannot reference modifier tokens", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            dark: [
+              {
+                colors: {
+                  primary: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [0, 0, 1] },
+                  },
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: "set",
+          name: "Components",
+          sources: [
+            {
+              button: {
+                // This tries to reference a token from the 'theme' modifier
+                // which should fail because modifiers don't pollute global space
+                background: {
+                  $type: "color",
+                  $value: "{colors.primary}",
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    // Should have an error because the reference cannot be resolved
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(
+      result.errors.some(
+        (e) => e.path.includes("background") || e.message.includes("not found"),
+      ),
+    ).toBe(true);
+  });
+
+  test("modifier contexts are isolated from each other", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "theme",
+          contexts: {
+            light: [
+              {
+                colors: {
+                  primary: {
+                    $type: "color",
+                    $value: { colorSpace: "srgb", components: [1, 1, 1] },
+                  },
+                },
+              },
+            ],
+            dark: [
+              {
+                colors: {
+                  // This tries to reference 'primary' from the light context
+                  // which should fail because contexts within a modifier are also isolated
+                  background: {
+                    $type: "color",
+                    $value: "{colors.primary}",
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    // Should have an error because dark context cannot reference light context tokens
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(
+      result.errors.some(
+        (e) => e.path.includes("background") || e.message.includes("not found"),
+      ),
+    ).toBe(true);
   });
 });

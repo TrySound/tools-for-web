@@ -86,7 +86,12 @@
     };
   };
 
-  const treeData = $derived(rootNodes.map(buildTreeItem));
+  const treeData = $derived(
+    rootNodes
+      // @todo temporary render only token-set
+      .filter((item) => item.meta.nodeType === "token-set")
+      .map(buildTreeItem),
+  );
   const expandedItems = new SvelteSet(
     // svelte-ignore state_referenced_locally
     rootNodes.length ? [rootNodes[0].nodeId] : [],
