@@ -40,6 +40,8 @@
     Paintbrush,
     Tags,
     ListPlus,
+    Layers,
+    GitBranch,
   } from "@lucide/svelte";
   import TreeView, { type TreeItem } from "./tree-view.svelte";
   import Editor from "./editor.svelte";
@@ -62,6 +64,9 @@
   let appElement: undefined | HTMLDivElement;
   const zeroIndex = generateKeyBetween(null, null);
 
+  let selectedContextId = $state<string | undefined>(undefined);
+  let isConfiguringModifiers = $state(false);
+
   onMount(() => {
     return startKeyUX(window, [
       hotkeyKeyUX([hotkeyMacCompat()]),
@@ -72,8 +77,11 @@
   const rootNodes = $derived(
     treeState
       .getChildren(undefined)
-      // @todo temporary render only token-set
-      .filter((item) => item.meta.nodeType === "token-set"),
+      .filter((item) =>
+        isConfiguringModifiers
+          ? item.meta.nodeType === "token-modifier"
+          : item.meta.nodeType === "token-set",
+      ),
   );
 
   // svelte-ignore state_referenced_locally
@@ -96,6 +104,22 @@
     // svelte-ignore state_referenced_locally
     rootNodes.length ? [rootNodes[0].nodeId] : [],
   );
+
+  const allContexts = $derived.by(() => {
+    const contexts: Array<{ nodeId: string; name: string }> = [];
+    const rootNodes = treeState.getChildren(undefined);
+    for (const node of rootNodes) {
+      if (node.meta.nodeType === "token-modifier") {
+        const modifierChildren = treeState.getChildren(node.nodeId);
+        for (const child of modifierChildren) {
+          if (child.meta.nodeType === "token-context") {
+            contexts.push({ nodeId: child.nodeId, name: child.meta.name });
+          }
+        }
+      }
+    }
+    return contexts;
+  });
 
   const handleDelete = () => {
     if (selectedItems.size === 0) {
@@ -126,65 +150,96 @@
     }
   };
 
-  const handleAddSet = () => {
-    // Token-sets can only be at the top level
-    const rootChildren = treeState.getChildren(undefined);
-    const lastChildIndex = rootChildren.at(-1)?.index ?? zeroIndex;
-    const insertAfterIndex = generateKeyBetween(lastChildIndex, null);
-    const newSet: TreeNode<TreeNodeMeta> = {
-      nodeId: crypto.randomUUID(),
-      parentId: undefined,
-      index: insertAfterIndex,
-      meta: {
-        nodeType: "token-set",
-        name: "New Set",
-      },
-    };
-    treeState.transact((tx) => {
-      tx.set(newSet);
-    });
-    selectedItems.clear();
-    selectedItems.add(newSet.nodeId);
-  };
-
-  const handleAddGroup = () => {
+  const addNode = (config: {
+    nodeType: TreeNodeMeta["nodeType"];
+    parentTypes: TreeNodeMeta["nodeType"][];
+    defaultName: string;
+  }) => {
     const firstSelectedId = Array.from(selectedItems)[0];
     const firstSelectedNode = treeState.getNode(firstSelectedId);
-    if (!firstSelectedNode) {
-      return;
-    }
-    // determine parent and index for new group
+
     let parentId: string | undefined;
     let insertAfterIndex: string;
-    if (
-      firstSelectedNode.meta.nodeType === "token-set" ||
-      firstSelectedNode.meta.nodeType === "token-group"
-    ) {
-      parentId = firstSelectedId;
-      // add at the end of the group
-      const children = treeState.getChildren(firstSelectedId);
-      const lastChildIndex = children.at(-1)?.index ?? zeroIndex;
+
+    if (config.parentTypes.length === 0) {
+      // Root level node (token-set, token-modifier)
+      const rootChildren = treeState.getChildren(undefined);
+      const lastChildIndex = rootChildren.at(-1)?.index ?? zeroIndex;
       insertAfterIndex = generateKeyBetween(lastChildIndex, null);
+      parentId = undefined;
     } else {
-      // add after the token
-      parentId = firstSelectedNode.parentId;
-      insertAfterIndex = generateKeyBetween(firstSelectedNode.index, null);
+      // Child node - needs a parent from allowed types
+      if (!firstSelectedNode) {
+        return;
+      }
+
+      const selectedType = firstSelectedNode.meta.nodeType;
+
+      if (config.parentTypes.includes(selectedType)) {
+        // Add as child of selected node
+        parentId = firstSelectedId;
+        const children = treeState.getChildren(firstSelectedId);
+        const lastChildIndex = children.at(-1)?.index ?? zeroIndex;
+        insertAfterIndex = generateKeyBetween(lastChildIndex, null);
+      } else if (
+        firstSelectedNode.parentId &&
+        config.parentTypes.includes(
+          treeState.getNode(firstSelectedNode.parentId)?.meta.nodeType!,
+        )
+      ) {
+        // Add as sibling after selected node (same parent)
+        parentId = firstSelectedNode.parentId;
+        insertAfterIndex = generateKeyBetween(firstSelectedNode.index, null);
+      } else {
+        // Cannot add here
+        return;
+      }
     }
-    const newGroup: TreeNode<TreeNodeMeta> = {
+
+    const newNode: TreeNode<TreeNodeMeta> = {
       nodeId: crypto.randomUUID(),
       parentId,
       index: insertAfterIndex,
       meta: {
-        nodeType: "token-group",
-        name: "New Group",
-      },
+        nodeType: config.nodeType,
+        name: config.defaultName,
+      } as TreeNodeMeta,
     };
+
     treeState.transact((tx) => {
-      tx.set(newGroup);
+      tx.set(newNode);
     });
     selectedItems.clear();
-    selectedItems.add(newGroup.nodeId);
+    selectedItems.add(newNode.nodeId);
   };
+
+  const addSet = () =>
+    addNode({
+      nodeType: "token-set",
+      parentTypes: [],
+      defaultName: "New Set",
+    });
+
+  const addGroup = () =>
+    addNode({
+      nodeType: "token-group",
+      parentTypes: ["token-set", "token-group"],
+      defaultName: "New Group",
+    });
+
+  const addModifier = () =>
+    addNode({
+      nodeType: "token-modifier",
+      parentTypes: [],
+      defaultName: "New Modifier",
+    });
+
+  const addContext = () =>
+    addNode({
+      nodeType: "token-context",
+      parentTypes: ["token-modifier"],
+      defaultName: "New Context",
+    });
 
   const handleTokenAdded = (tokenNodeId: string) => {
     // select and open editor for the new token
@@ -217,12 +272,42 @@
     newParentId: undefined | string,
     position: number,
   ) => {
-    // Validate that token-sets can only be at top level
+    // Validate move constraints based on node types
     for (const itemId of itemIds) {
       const node = treeState.getNode(itemId);
-      if (node?.meta.nodeType === "token-set" && newParentId !== undefined) {
-        // Token-sets cannot be nested, reject this move
+      if (!node) continue;
+
+      const nodeType = node.meta.nodeType;
+
+      // Token-sets and modifiers can only be at top level
+      if (
+        (nodeType === "token-set" || nodeType === "token-modifier") &&
+        newParentId !== undefined
+      ) {
         return;
+      }
+
+      // Contexts must have a modifier as parent
+      if (nodeType === "token-context") {
+        if (newParentId === undefined) return;
+        const parentNode = treeState.getNode(newParentId);
+        if (parentNode?.meta.nodeType !== "token-modifier") return;
+      }
+
+      // Groups and tokens must be under sets or groups
+      if (nodeType === "token-group" || nodeType === "token") {
+        if (newParentId !== undefined) {
+          const parentNode = treeState.getNode(newParentId);
+          if (
+            parentNode?.meta.nodeType !== "token-set" &&
+            parentNode?.meta.nodeType !== "token-group"
+          ) {
+            return;
+          }
+        } else {
+          // Groups and tokens cannot be at root level
+          return;
+        }
       }
     }
 
@@ -339,9 +424,11 @@
   <div class="horizontal-container">
     <!-- Left Panel: Design Tokens -->
     <aside class="panel left-panel">
-      <div class="panel-header">
+      <div class="panel-header app-toolbar">
         <AppMenu />
-        <h1 class="a-panel-title">Engramma</h1>
+        <h1 class="a-panel-title">
+          {isConfiguringModifiers ? "Modifiers" : "Engramma"}
+        </h1>
         <div class="toolbar-actions">
           {#if selectedItems.size > 0}
             <button
@@ -356,29 +443,54 @@
               Delete selected items
             </div>
           {/if}
-          <button
-            class="a-button"
-            aria-label="Add set"
-            interestfor="app-add-set-tooltip"
-            onclick={handleAddSet}
-          >
-            <ListPlus size={16} />
-          </button>
-          <div id="app-add-set-tooltip" popover="hint" class="a-tooltip">
-            Add a new token set
-          </div>
-          <button
-            class="a-button"
-            aria-label="Add group"
-            interestfor="app-add-group-tooltip"
-            onclick={handleAddGroup}
-          >
-            <Folder size={16} />
-          </button>
-          <div id="app-add-group-tooltip" popover="hint" class="a-tooltip">
-            Add a new group
-          </div>
-          <AddToken {selectedItems} onTokenAdded={handleTokenAdded} />
+          {#if isConfiguringModifiers}
+            <button
+              class="a-button"
+              aria-label="Add modifier"
+              interestfor="app-add-modifier-tooltip"
+              onclick={addModifier}
+            >
+              <Layers size={16} />
+            </button>
+            <div id="app-add-modifier-tooltip" popover="hint" class="a-tooltip">
+              Add a new modifier
+            </div>
+            <button
+              class="a-button"
+              aria-label="Add context"
+              interestfor="app-add-context-tooltip"
+              onclick={addContext}
+            >
+              <GitBranch size={16} />
+            </button>
+            <div id="app-add-context-tooltip" popover="hint" class="a-tooltip">
+              Add a new context
+            </div>
+          {:else}
+            <button
+              class="a-button"
+              aria-label="Add set"
+              interestfor="app-add-set-tooltip"
+              onclick={addSet}
+            >
+              <ListPlus size={16} />
+            </button>
+            <div id="app-add-set-tooltip" popover="hint" class="a-tooltip">
+              Add a new token set
+            </div>
+            <button
+              class="a-button"
+              aria-label="Add group"
+              interestfor="app-add-group-tooltip"
+              onclick={addGroup}
+            >
+              <Folder size={16} />
+            </button>
+            <div id="app-add-group-tooltip" popover="hint" class="a-tooltip">
+              Add a new group
+            </div>
+            <AddToken {selectedItems} onTokenAdded={handleTokenAdded} />
+          {/if}
         </div>
       </div>
 
@@ -474,12 +586,32 @@
             {@render treeItemEditorButton(item.id)}
           </div>
         {/if}
+
+        {#if node?.meta.nodeType === "token-modifier"}
+          <div class="token">
+            <div class="token-icon">
+              <Layers size={16} />
+            </div>
+            <span class="token-name">{item.name}</span>
+            {@render treeItemEditorButton(item.id)}
+          </div>
+        {/if}
+
+        {#if node?.meta.nodeType === "token-context"}
+          <div class="token">
+            <div class="token-icon">
+              <GitBranch size={16} />
+            </div>
+            <span class="token-name">{item.name}</span>
+            {@render treeItemEditorButton(item.id)}
+          </div>
+        {/if}
       {/snippet}
 
       <div class="tokens-panel">
         <TreeView
           id="tokens-tree"
-          label="Design Tokens"
+          label={isConfiguringModifiers ? "Modifiers" : "Design Tokens"}
           data={treeData}
           {selectedItems}
           {expandedItems}
@@ -496,28 +628,38 @@
             }
           }}
           canAcceptChildren={(targetId, items) => {
-            // only set can be dropped into root
             if (!targetId) {
-              return items.every(
-                (itemId) =>
-                  treeState.getNode(itemId)?.meta.nodeType === "token-set",
-              );
-            }
-            const target = targetId ? treeState.getNode(targetId) : undefined;
-            // groups and sets accepts only other groups and tokens
-            if (
-              target?.meta.nodeType === "token-set" ||
-              target?.meta.nodeType === "token-group"
-            ) {
+              // Root level constraints based on mode
               return items.every((itemId) => {
                 const node = treeState.getNode(itemId);
-                return (
-                  node?.meta.nodeType === "token-group" ||
-                  node?.meta.nodeType === "token"
-                );
+                const nodeType = node?.meta.nodeType;
+                return isConfiguringModifiers
+                  ? nodeType === "token-modifier"
+                  : nodeType === "token-set";
               });
             }
-            // tokens do not accept anything
+
+            const target = treeState.getNode(targetId);
+            const targetType = target?.meta.nodeType;
+
+            // token-set and token-group accept groups and tokens
+            if (targetType === "token-set" || targetType === "token-group") {
+              return items.every((itemId) => {
+                const node = treeState.getNode(itemId);
+                const nodeType = node?.meta.nodeType;
+                return nodeType === "token-group" || nodeType === "token";
+              });
+            }
+
+            // token-modifier accepts only token-context
+            if (targetType === "token-modifier") {
+              return items.every((itemId) => {
+                const node = treeState.getNode(itemId);
+                return node?.meta.nodeType === "token-context";
+              });
+            }
+
+            // Other node types (token, token-context) don't accept children
             return false;
           }}
           onMove={handleMove}
@@ -529,9 +671,46 @@
 
     <!-- Right Panel: CSS Variables / JSON -->
     <main class="panel right-panel">
-      <div class="panel-header"><!-- placeholder for sets --></div>
+      <div class="panel-header">
+        <div class="a-tab-scroller">
+          <div class="a-tab-list" role="tablist" aria-label="Modifier contexts">
+            <button
+              role="tab"
+              aria-selected={selectedContextId === undefined &&
+                !isConfiguringModifiers}
+              class="a-tab"
+              onclick={() => {
+                selectedContextId = undefined;
+                isConfiguringModifiers = false;
+              }}
+            >
+              Sets
+            </button>
+            {#each allContexts as context (context.nodeId)}
+              <button
+                role="tab"
+                aria-selected={selectedContextId === context.nodeId}
+                class="a-tab"
+                onclick={() => {
+                  selectedContextId = context.nodeId;
+                  isConfiguringModifiers = false;
+                }}
+              >
+                {context.name}
+              </button>
+            {/each}
+          </div>
+          <button
+            class="a-button a-tab-action"
+            aria-label="Configure modifiers"
+            onclick={() => (isConfiguringModifiers = !isConfiguringModifiers)}
+          >
+            <Settings size={16} />
+          </button>
+        </div>
+      </div>
       <div class="styleguide-panel">
-        <Styleguide {selectedItems} />
+        <Styleguide {selectedItems} {selectedContextId} />
       </div>
     </main>
   </div>
@@ -572,15 +751,18 @@
   }
 
   .panel-header {
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    background: var(--bg-primary);
+    overflow: hidden;
+  }
+
+  .app-toolbar {
     display: flex;
     justify-content: flex-start;
     align-items: center;
     padding: 0 8px;
-    border-bottom: 1px solid var(--border-color);
-    flex-shrink: 0;
-    background: var(--bg-primary);
     gap: 8px;
-    overflow: hidden;
   }
 
   .toolbar-actions {

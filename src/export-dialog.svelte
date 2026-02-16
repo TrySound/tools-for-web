@@ -83,7 +83,7 @@
       </button>
     </div>
     <button
-      class="a-button dialog-close"
+      class="a-button a-tab-action"
       aria-label="Close"
       commandfor="export-dialog"
       command="close"
@@ -131,12 +131,6 @@
     &::backdrop {
       background: rgba(0, 0, 0, 0.5);
     }
-  }
-
-  .dialog-close {
-    position: sticky;
-    right: 8px;
-    margin: 0 8px;
   }
 
   .code-panel {

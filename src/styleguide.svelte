@@ -22,7 +22,11 @@
   } from "./css-variables";
   import CopyButton from "./copy-button.svelte";
 
-  const { selectedItems }: { selectedItems: Set<string> } = $props();
+  const {
+    selectedItems,
+    selectedContextId,
+  }: { selectedItems: Set<string>; selectedContextId: string | undefined } =
+    $props();
 
   const visibleNodes = $derived.by(() => {
     const visibleNodes = new Set<string>();

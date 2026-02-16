@@ -155,6 +155,17 @@
     return ["mixed"];
   };
 
+  const getModifierContexts = (modifierId: string) => {
+    const contexts: Array<{ nodeId: string; name: string }> = [];
+    const children = treeState.getChildren(modifierId);
+    for (const child of children) {
+      if (child.meta.nodeType === "token-context") {
+        contexts.push({ nodeId: child.nodeId, name: child.meta.name });
+      }
+    }
+    return contexts;
+  };
+
   const updateMeta = (newMeta: Partial<TreeNodeMeta>) => {
     if (node?.meta) {
       treeState.transact((tx) => {
@@ -404,11 +415,21 @@
 <div {id} popover="auto" class="a-popover editor-popover" {...rest}>
   <div class="form-header">
     <h2 class="a-panel-title">
-      {node?.meta.nodeType === "token-set"
-        ? "Token Set"
-        : node?.meta.nodeType === "token-group"
-          ? "Group"
-          : "Token"}
+      {#if node?.meta.nodeType === "token-set"}
+        Set
+      {/if}
+      {#if node?.meta.nodeType === "token-modifier"}
+        Modifier
+      {/if}
+      {#if node?.meta.nodeType === "token-context"}
+        Modifier Context
+      {/if}
+      {#if node?.meta.nodeType === "token-group"}
+        Group
+      {/if}
+      {#if node?.meta.nodeType === "token"}
+        Token
+      {/if}
     </h2>
     <button
       class="a-button"
@@ -1097,6 +1118,33 @@
               updateMeta({ value });
             }}
           />
+        </div>
+      {/if}
+
+      {#if node?.meta.nodeType === "token-modifier"}
+        {@const contexts = getModifierContexts(node.nodeId)}
+        <div class="form-group">
+          <label class="a-label" for="default-context-select"
+            >Default Context</label
+          >
+          <select
+            id="default-context-select"
+            class="a-field"
+            value={node.meta.default?.ref ?? ""}
+            onchange={(e) => {
+              const value = e.currentTarget.value;
+              updateMeta({
+                default: value ? { ref: value } : undefined,
+              });
+            }}
+          >
+            <option class="a-item" value="">None</option>
+            {#each contexts as context}
+              <option class="a-item" value={context.nodeId}>
+                {context.name}
+              </option>
+            {/each}
+          </select>
         </div>
       {/if}
     </div>
