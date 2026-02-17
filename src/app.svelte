@@ -267,6 +267,21 @@
     }
   };
 
+  const resetSelectionToFirstNode = () => {
+    selectedItems.clear();
+    expandedItems.clear();
+
+    const allRootNodes = treeState.getChildren(undefined);
+    const firstNode = isConfiguringModifiers
+      ? allRootNodes.find((n) => n.meta.nodeType === "token-modifier")
+      : allRootNodes.find((n) => n.meta.nodeType === "token-set");
+
+    if (firstNode) {
+      selectedItems.add(firstNode.nodeId);
+      expandedItems.add(firstNode.nodeId);
+    }
+  };
+
   const handleMove = (
     itemIds: string[],
     newParentId: undefined | string,
@@ -681,7 +696,10 @@
               class="a-tab"
               onclick={() => {
                 selectedContextId = undefined;
-                isConfiguringModifiers = false;
+                if (isConfiguringModifiers) {
+                  isConfiguringModifiers = false;
+                  resetSelectionToFirstNode();
+                }
               }}
             >
               Sets
@@ -693,7 +711,10 @@
                 class="a-tab"
                 onclick={() => {
                   selectedContextId = context.nodeId;
-                  isConfiguringModifiers = false;
+                  if (isConfiguringModifiers) {
+                    isConfiguringModifiers = false;
+                    resetSelectionToFirstNode();
+                  }
                 }}
               >
                 {context.name}
@@ -703,7 +724,11 @@
           <button
             class="a-button a-tab-action"
             aria-label="Configure modifiers"
-            onclick={() => (isConfiguringModifiers = !isConfiguringModifiers)}
+            onclick={() => {
+              isConfiguringModifiers = !isConfiguringModifiers;
+              selectedContextId = undefined;
+              resetSelectionToFirstNode();
+            }}
           >
             <Settings size={16} />
           </button>
