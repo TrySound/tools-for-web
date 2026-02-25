@@ -4,6 +4,7 @@
     parentId: undefined | string;
     name: string;
     children: TreeItem[];
+    isOwned?: boolean;
   };
 </script>
 
@@ -479,7 +480,7 @@
 </script>
 
 {#snippet item(itemData: TreeItem, level: number, position: number)}
-  {@const { id, name, children } = itemData}
+  {@const { id, name, children, isOwned } = itemData}
   {@const isEditing = editingItemId === id}
   <div
     id={getItemElementId(id)}
@@ -492,6 +493,7 @@
     data-hovered={hoveredItemId === id}
     data-position={position}
     data-name={name}
+    data-owned={isOwned ?? true}
   >
     <div
       class="node"
@@ -618,6 +620,10 @@
 
     &[data-dragging="true"] {
       --tree-view-node-opacity: 0.5;
+    }
+
+    &[data-owned="false"] {
+      --tree-view-node-opacity: 0.4;
     }
   }
 

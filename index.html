@@ -1,38 +1,157 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Engramma - design tokens app</title>
-    <meta
-      name="description"
-      content="An app to manage standard based design tokens and convert them to CSS or SCSS variables"
-    />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://engramma.dev/" />
-    <meta property="og:image" content="./logo.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="stylesheet" href="./src/app.css" />
-    <!-- Privacy-friendly analytics by Plausible -->
-    <script
-      async
-      src="https://plausible.io/js/pa-lqFhwhQS8pPxKZ9mW4uH-.js"
-    ></script>
-    <script>
-      ((window.plausible =
-        window.plausible ||
-        function () {
-          (plausible.q = plausible.q || []).push(arguments);
-        }),
-        (plausible.init =
-          plausible.init ||
-          function (i) {
-            plausible.o = i || {};
-          }));
-      plausible.init();
-    </script>
-  </head>
-  <body>
-    <script type="module" src="./src/main.ts"></script>
-  </body>
-</html>
+<style>
+  body {
+    background-color: black;
+    font-family: sans-serif;
+    display: grid;
+    height: 100%;
+    height: stretch;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .nav {
+    border: 1px solid #585a5e;
+    width: 60dvw;
+    margin: 0 auto;
+    border-radius: 2rem;
+  }
+
+  .menu {
+    color: gray;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: end;
+    padding: 0 1rem;
+  }
+
+  .item {
+    position: relative;
+  }
+
+  @keyframes bounce {
+    from {
+      translate: 0 30px;
+    }
+    80% {
+      scale: 1.2;
+    }
+    to {
+      scale: 1;
+      translate: 0 0px;
+    }
+  }
+
+  @keyframes bounceIn {
+    0% {
+      scale: 1;
+      translate: 0 30px;
+    }
+    40% {
+      scale: 1.2;
+      translate: 0 0;
+    }
+    60% {
+      scale: 0.95;
+    }
+    80% {
+      scale: 1.05;
+    }
+    100% {
+      scale: 1;
+      translate: 0 0;
+    }
+  }
+
+  @keyframes bounceOut {
+    0% {
+      scale: 1;
+      translate: 0 0;
+    }
+    40% {
+      scale: 0.9;
+      translate: 0 30px;
+    }
+    60% {
+      scale: 1.02;
+    }
+    80% {
+      scale: 0.98;
+    }
+    100% {
+      scale: 1;
+      translate: 0 30px;
+    }
+  }
+
+  .item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    width: 100px;
+    height: 30px;
+    margin: 0 auto;
+    background-color: white;
+    pointer-events: none;
+    clip-path: path("M0,30 S-20,30,0,30 S30,15,50,15 S80,30,100,30 Z");
+    translate: 0 30px;
+    transform-origin: center bottom;
+  }
+
+  .item:has(.link:target)::before {
+    translate: 0 0;
+  }
+
+  .item:has(.link.ready)::before {
+    animation: bounceOut 0.8s ease forwards;
+  }
+
+  .item:has(.link.ready:target)::before {
+    animation: bounceIn 0.8s ease forwards;
+  }
+
+  .link {
+    color: inherit;
+    text-decoration: none;
+    display: block;
+    padding: 2rem 1.5rem;
+  }
+
+  .link:hover,
+  .link:focus-visible,
+  .link:target {
+    color: #2b75ed;
+  }
+
+  .content {
+    background-color: white;
+    border-radius: 2rem;
+    height: 300px;
+  }
+</style>
+
+<nav class="nav">
+  <ul class="menu">
+    <li class="item">
+      <a class="link" id="item-1" href="#item-1">Menu Item</a>
+    </li>
+    <li class="item">
+      <a class="link" id="item-2" href="#item-2">Menu Item</a>
+    </li>
+  </ul>
+  <div class="content"></div>
+</nav>
+
+<script>
+  // activate
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".link")) {
+      for (const link of document.querySelectorAll(".link")) {
+        link.classList.add("ready");
+      }
+    }
+  });
+</script>

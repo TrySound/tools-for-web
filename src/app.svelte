@@ -54,6 +54,7 @@
     resolveTokenValue,
     treeState,
     type TreeNodeMeta,
+    getNodePath,
   } from "./state.svelte";
   import { serializeColor } from "./color";
   import type { Value } from "./schema";
@@ -89,6 +90,7 @@
     rootNodes.length ? [rootNodes[0].nodeId] : [],
   );
 
+  // Build tree item recursively
   const buildTreeItem = (node: TreeNode<TreeNodeMeta>): TreeItem => {
     const children = treeState.getChildren(node.nodeId);
     return {
@@ -96,10 +98,83 @@
       parentId: node.parentId,
       name: node.meta.name,
       children: children.map(buildTreeItem),
+      isOwned: true,
     };
   };
 
-  const treeData = $derived(rootNodes.map(buildTreeItem));
+  // Build merged tree for context view
+  const buildMergedTreeItem = (
+    node: TreeNode<TreeNodeMeta>,
+    contextTokens: Map<string, TreeNode<TreeNodeMeta>>,
+  ): TreeItem => {
+    const children = treeState.getChildren(node.nodeId);
+    const contextToken = contextTokens.get(node.nodeId);
+    const isOwned = contextToken !== undefined;
+
+    // Use context token if available, otherwise use base token
+    const displayNode = contextToken ?? node;
+
+    return {
+      id: displayNode.nodeId,
+      parentId: displayNode.parentId,
+      name: displayNode.meta.name,
+      children: children.map((child) =>
+        buildMergedTreeItem(child, contextTokens),
+      ),
+      isOwned,
+    };
+  };
+
+  const treeData = $derived.by(() => {
+    if (selectedContextId) {
+      // Get all base set tokens
+      const baseNodes = treeState.getBaseNodes();
+
+      // Get all tokens in the selected context
+      const contextTokens = new Map<string, TreeNode<TreeNodeMeta>>();
+      const contextTokenList = treeState.getAllTokensUnder(selectedContextId);
+
+      // Build a map of paths to context tokens
+      for (const token of contextTokenList) {
+        const path = getNodePath(token, treeState.nodes()).slice(1).join("/");
+        contextTokens.set(path, token);
+      }
+
+      // Merge: show base sets but indicate which tokens are owned by context
+      return baseNodes.map((setNode) => {
+        const children = treeState.getChildren(setNode.nodeId);
+        return {
+          id: setNode.nodeId,
+          parentId: setNode.parentId,
+          name: setNode.meta.name,
+          children: children.map((child) => {
+            // For each child, check if it's in the context
+            const childPath = getNodePath(child, treeState.nodes())
+              .slice(1)
+              .join("/");
+            const contextToken = contextTokens.get(childPath);
+
+            if (child.meta.nodeType === "token") {
+              const isOwned = contextToken !== undefined;
+              return {
+                id: isOwned ? contextToken.nodeId : child.nodeId,
+                parentId: isOwned ? contextToken.parentId : child.parentId,
+                name: child.meta.name,
+                children: [],
+                isOwned,
+              };
+            }
+
+            // For groups, recursively build with context awareness
+            return buildMergedTreeItem(child, contextTokens);
+          }),
+          isOwned: true,
+        };
+      });
+    }
+
+    return rootNodes.map(buildTreeItem);
+  });
   const expandedItems = new SvelteSet(
     // svelte-ignore state_referenced_locally
     rootNodes.length ? [rootNodes[0].nodeId] : [],
@@ -458,53 +533,63 @@
               Delete selected items
             </div>
           {/if}
-          {#if isConfiguringModifiers}
-            <button
-              class="a-button"
-              aria-label="Add modifier"
-              interestfor="app-add-modifier-tooltip"
-              onclick={addModifier}
-            >
-              <Layers size={16} />
-            </button>
-            <div id="app-add-modifier-tooltip" popover="hint" class="a-tooltip">
-              Add a new modifier
-            </div>
-            <button
-              class="a-button"
-              aria-label="Add context"
-              interestfor="app-add-context-tooltip"
-              onclick={addContext}
-            >
-              <GitBranch size={16} />
-            </button>
-            <div id="app-add-context-tooltip" popover="hint" class="a-tooltip">
-              Add a new context
-            </div>
-          {:else}
-            <button
-              class="a-button"
-              aria-label="Add set"
-              interestfor="app-add-set-tooltip"
-              onclick={addSet}
-            >
-              <ListPlus size={16} />
-            </button>
-            <div id="app-add-set-tooltip" popover="hint" class="a-tooltip">
-              Add a new token set
-            </div>
-            <button
-              class="a-button"
-              aria-label="Add group"
-              interestfor="app-add-group-tooltip"
-              onclick={addGroup}
-            >
-              <Folder size={16} />
-            </button>
-            <div id="app-add-group-tooltip" popover="hint" class="a-tooltip">
-              Add a new group
-            </div>
-            <AddToken {selectedItems} onTokenAdded={handleTokenAdded} />
+          {#if !selectedContextId}
+            {#if isConfiguringModifiers}
+              <button
+                class="a-button"
+                aria-label="Add modifier"
+                interestfor="app-add-modifier-tooltip"
+                onclick={addModifier}
+              >
+                <Layers size={16} />
+              </button>
+              <div
+                id="app-add-modifier-tooltip"
+                popover="hint"
+                class="a-tooltip"
+              >
+                Add a new modifier
+              </div>
+              <button
+                class="a-button"
+                aria-label="Add context"
+                interestfor="app-add-context-tooltip"
+                onclick={addContext}
+              >
+                <GitBranch size={16} />
+              </button>
+              <div
+                id="app-add-context-tooltip"
+                popover="hint"
+                class="a-tooltip"
+              >
+                Add a new context
+              </div>
+            {:else}
+              <button
+                class="a-button"
+                aria-label="Add set"
+                interestfor="app-add-set-tooltip"
+                onclick={addSet}
+              >
+                <ListPlus size={16} />
+              </button>
+              <div id="app-add-set-tooltip" popover="hint" class="a-tooltip">
+                Add a new token set
+              </div>
+              <button
+                class="a-button"
+                aria-label="Add group"
+                interestfor="app-add-group-tooltip"
+                onclick={addGroup}
+              >
+                <Folder size={16} />
+              </button>
+              <div id="app-add-group-tooltip" popover="hint" class="a-tooltip">
+                Add a new group
+              </div>
+              <AddToken {selectedItems} onTokenAdded={handleTokenAdded} />
+            {/if}
           {/if}
         </div>
       </div>
@@ -682,7 +767,7 @@
       </div>
     </aside>
 
-    <Editor id="app-node-editor" {selectedItems} />
+    <Editor id="app-node-editor" {selectedItems} {selectedContextId} />
 
     <!-- Right Panel: CSS Variables / JSON -->
     <main class="panel right-panel">

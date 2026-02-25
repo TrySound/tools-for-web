@@ -12,6 +12,9 @@
     findTokenType,
     type TreeNodeMeta,
     resolveRawValue,
+    getNodePath,
+    findNodeAtPath,
+    type TokenMeta,
   } from "./state.svelte";
   import { parseColor, serializeColor } from "./color";
   import type {
@@ -31,10 +34,12 @@
   let {
     id,
     selectedItems,
+    selectedContextId,
     ...rest
   }: HTMLAttributes<HTMLDivElement> & {
     id: string;
     selectedItems: SvelteSet<string>;
+    selectedContextId?: string;
   } = $props();
 
   const fontWeightMap: Record<string, number> = {
@@ -167,7 +172,27 @@
   };
 
   const updateMeta = (newMeta: Partial<TreeNodeMeta>) => {
-    if (node?.meta) {
+    if (!node?.meta) return;
+
+    // Check if we're editing a token in a context that's not owned by it
+    const isEditingInheritedToken =
+      selectedContextId &&
+      node.meta.nodeType === "token" &&
+      !isTokenOwnedByContext(node.nodeId, selectedContextId);
+
+    if (isEditingInheritedToken) {
+      // Create a context override instead of editing the base token
+      const newTokenId = treeState.createContextOverride(
+        selectedContextId,
+        node.nodeId,
+        newMeta as Partial<TokenMeta>,
+      );
+
+      // Update selection to the new override token
+      selectedItems.clear();
+      selectedItems.add(newTokenId);
+    } else {
+      // Normal update
       treeState.transact((tx) => {
         const updatedNode = {
           ...node,
@@ -176,6 +201,33 @@
         tx.set(updatedNode);
       });
     }
+  };
+
+  /**
+   * Check if a token is directly owned by a context (not inherited)
+   */
+  const isTokenOwnedByContext = (
+    tokenId: string,
+    contextId: string,
+  ): boolean => {
+    const tokenNode = treeState.getNode(tokenId);
+    if (!tokenNode) return false;
+
+    // Walk up the parent chain to see if we reach the context
+    let currentId: string | undefined = tokenId;
+    while (currentId) {
+      const currentNode = treeState.getNode(currentId);
+      if (!currentNode) break;
+
+      // If we found the context as a parent, this token is owned by it
+      if (currentNode.nodeId === contextId) {
+        return true;
+      }
+
+      currentId = currentNode.parentId;
+    }
+
+    return false;
   };
 
   const handleNameChange = (newName: string) => {
