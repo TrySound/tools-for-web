@@ -1,5 +1,6 @@
 import * as z from "zod/mini";
 import { createSubscriber } from "svelte/reactivity";
+import { generateKeyBetween } from "fractional-indexing";
 import { TreeStore, type Transaction, type TreeNode } from "./store";
 import {
   type RawValue,
@@ -296,6 +297,54 @@ export const resolveTokenValue = (
 };
 
 /**
+ * Get the path of a node by traversing up to the root
+ * Returns array of node names from root to the node
+ */
+export const getNodePath = (
+  node: TreeNode<TreeNodeMeta>,
+  nodes: Map<string, TreeNode<TreeNodeMeta>>,
+): string[] => {
+  const path: string[] = [];
+  let current: TreeNode<TreeNodeMeta> | undefined = node;
+
+  while (current) {
+    path.unshift(current.meta.name);
+    if (current.parentId) {
+      current = nodes.get(current.parentId);
+    } else {
+      current = undefined;
+    }
+  }
+
+  return path;
+};
+
+/**
+ * Find a node at a given path under a parent context
+ * Returns the node or undefined if not found
+ */
+export const findNodeAtPath = (
+  contextId: string,
+  path: string[],
+  nodes: Map<string, TreeNode<TreeNodeMeta>>,
+): TreeNode<TreeNodeMeta> | undefined => {
+  let currentParentId: string | undefined = contextId;
+
+  for (const segment of path) {
+    const children = Array.from(nodes.values()).filter(
+      (n) => n.parentId === currentParentId,
+    );
+    const match = children.find((n) => n.meta.name === segment);
+    if (!match) {
+      return undefined;
+    }
+    currentParentId = match.nodeId;
+  }
+
+  return currentParentId ? nodes.get(currentParentId) : undefined;
+};
+
+/**
  * Check if setting an alias would create a circular dependency
  * Returns true if the alias would be safe (no circular dependency)
  * Returns false if the alias would create a circular dependency
@@ -344,6 +393,50 @@ export const isAliasCircular = (
   }
 
   return false; // No circular dependency
+};
+
+/**
+ * Create a path of groups in a context, returning the leaf node ID
+ * Creates intermediate groups if they don't exist
+ */
+export const createPathInContext = (
+  contextId: string,
+  path: string[],
+  tx: Transaction<TreeNodeMeta>,
+  nodes: Map<string, TreeNode<TreeNodeMeta>>,
+): string => {
+  let currentParentId: string = contextId;
+
+  for (const segment of path) {
+    // Check if a group with this name already exists
+    const existingGroup = Array.from(nodes.values()).find(
+      (n) =>
+        n.parentId === currentParentId &&
+        n.meta.nodeType === "token-group" &&
+        n.meta.name === segment,
+    );
+
+    if (existingGroup) {
+      currentParentId = existingGroup.nodeId;
+    } else {
+      // Create new group
+      const newGroup: TreeNode<TreeNodeMeta> = {
+        nodeId: crypto.randomUUID(),
+        parentId: currentParentId,
+        index: generateKeyBetween(null, null),
+        meta: {
+          nodeType: "token-group",
+          name: segment,
+        } as GroupMeta,
+      };
+      tx.set(newGroup);
+      currentParentId = newGroup.nodeId;
+      // Update nodes map for subsequent lookups
+      nodes.set(newGroup.nodeId, newGroup);
+    }
+  }
+
+  return currentParentId;
 };
 
 export type TreeNodeMeta =
@@ -402,6 +495,108 @@ export class TreeState<Meta> {
   getNextSibling(nodeId: string): TreeNode<Meta> | undefined {
     this.#subscribe();
     return this.#store.getNextSibling(nodeId);
+  }
+
+  /**
+   * Get all base set nodes (token-set children excluding modifiers)
+   */
+  getBaseNodes(): TreeNode<Meta>[] {
+    this.#subscribe();
+    return this.#store
+      .getChildren(undefined)
+      .filter((n) => (n.meta as TreeNodeMeta).nodeType === "token-set");
+  }
+
+  /**
+   * Get all tokens under a parent (recursive)
+   */
+  getAllTokensUnder(parentId: string | undefined): TreeNode<Meta>[] {
+    this.#subscribe();
+    const tokens: TreeNode<Meta>[] = [];
+    const collect = (id: string | undefined) => {
+      const children = this.#store.getChildren(id);
+      for (const child of children) {
+        const meta = child.meta as TreeNodeMeta;
+        if (meta.nodeType === "token") {
+          tokens.push(child);
+        } else if (
+          meta.nodeType === "token-group" ||
+          meta.nodeType === "token-set" ||
+          meta.nodeType === "token-context"
+        ) {
+          collect(child.nodeId);
+        }
+      }
+    };
+    collect(parentId);
+    return tokens;
+  }
+
+  /**
+   * Create a token override in a context based on a source token
+   * Returns the new token's nodeId
+   */
+  createContextOverride(
+    contextId: string,
+    sourceTokenId: string,
+    tokenData: Partial<TokenMeta>,
+  ): string {
+    const nodes = this.#store.nodes();
+    const sourceToken = nodes.get(sourceTokenId);
+    if (
+      !sourceToken ||
+      (sourceToken.meta as TreeNodeMeta).nodeType !== "token"
+    ) {
+      throw new Error("Source token not found");
+    }
+
+    const sourceMeta = sourceToken.meta as TokenMeta;
+
+    // Get the path of the source token (excluding the root set name)
+    const fullPath = getNodePath(
+      sourceToken as TreeNode<TreeNodeMeta>,
+      nodes as Map<string, TreeNode<TreeNodeMeta>>,
+    );
+    // Remove the root set name from the path
+    const pathWithoutRoot = fullPath.slice(1, -1); // Exclude root and token name
+
+    let newTokenId: string | undefined;
+
+    this.transact((tx) => {
+      // Create the path in the context
+      const parentId = createPathInContext(
+        contextId,
+        pathWithoutRoot,
+        tx as Transaction<TreeNodeMeta>,
+        nodes as Map<string, TreeNode<TreeNodeMeta>>,
+      );
+
+      // Generate index for the new token
+      const siblings = this.#store.getChildren(parentId);
+      const lastIndex =
+        siblings.at(-1)?.index ?? generateKeyBetween(null, null);
+      const newIndex = generateKeyBetween(lastIndex, null);
+
+      // Create the token override
+      const newToken: TreeNode<TreeNodeMeta> = {
+        nodeId: crypto.randomUUID(),
+        parentId,
+        index: newIndex,
+        meta: {
+          nodeType: "token",
+          name: sourceMeta.name,
+          description: tokenData.description ?? sourceMeta.description,
+          deprecated: tokenData.deprecated ?? sourceMeta.deprecated,
+          type: tokenData.type ?? sourceMeta.type,
+          value: tokenData.value ?? sourceMeta.value,
+        } as TokenMeta,
+      };
+
+      tx.set(newToken as TreeNode<Meta>);
+      newTokenId = newToken.nodeId;
+    });
+
+    return newTokenId!;
   }
 }
 

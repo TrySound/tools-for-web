@@ -359,4 +359,10 @@ body {
       anchor-name: --a-selected-tab;
     }
   }
+
+  .a-tab-action {
+    position: sticky;
+    right: 8px;
+    margin: 0 8px;
+  }
 }

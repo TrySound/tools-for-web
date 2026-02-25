@@ -12,6 +12,9 @@
     findTokenType,
     type TreeNodeMeta,
     resolveRawValue,
+    getNodePath,
+    findNodeAtPath,
+    type TokenMeta,
   } from "./state.svelte";
   import { parseColor, serializeColor } from "./color";
   import type {
@@ -31,10 +34,12 @@
   let {
     id,
     selectedItems,
+    selectedContextId,
     ...rest
   }: HTMLAttributes<HTMLDivElement> & {
     id: string;
     selectedItems: SvelteSet<string>;
+    selectedContextId?: string;
   } = $props();
 
   const fontWeightMap: Record<string, number> = {
@@ -155,8 +160,39 @@
     return ["mixed"];
   };
 
+  const getModifierContexts = (modifierId: string) => {
+    const contexts: Array<{ nodeId: string; name: string }> = [];
+    const children = treeState.getChildren(modifierId);
+    for (const child of children) {
+      if (child.meta.nodeType === "token-context") {
+        contexts.push({ nodeId: child.nodeId, name: child.meta.name });
+      }
+    }
+    return contexts;
+  };
+
   const updateMeta = (newMeta: Partial<TreeNodeMeta>) => {
-    if (node?.meta) {
+    if (!node?.meta) return;
+
+    // Check if we're editing a token in a context that's not owned by it
+    const isEditingInheritedToken =
+      selectedContextId &&
+      node.meta.nodeType === "token" &&
+      !isTokenOwnedByContext(node.nodeId, selectedContextId);
+
+    if (isEditingInheritedToken) {
+      // Create a context override instead of editing the base token
+      const newTokenId = treeState.createContextOverride(
+        selectedContextId,
+        node.nodeId,
+        newMeta as Partial<TokenMeta>,
+      );
+
+      // Update selection to the new override token
+      selectedItems.clear();
+      selectedItems.add(newTokenId);
+    } else {
+      // Normal update
       treeState.transact((tx) => {
         const updatedNode = {
           ...node,
@@ -165,6 +201,33 @@
         tx.set(updatedNode);
       });
     }
+  };
+
+  /**
+   * Check if a token is directly owned by a context (not inherited)
+   */
+  const isTokenOwnedByContext = (
+    tokenId: string,
+    contextId: string,
+  ): boolean => {
+    const tokenNode = treeState.getNode(tokenId);
+    if (!tokenNode) return false;
+
+    // Walk up the parent chain to see if we reach the context
+    let currentId: string | undefined = tokenId;
+    while (currentId) {
+      const currentNode = treeState.getNode(currentId);
+      if (!currentNode) break;
+
+      // If we found the context as a parent, this token is owned by it
+      if (currentNode.nodeId === contextId) {
+        return true;
+      }
+
+      currentId = currentNode.parentId;
+    }
+
+    return false;
   };
 
   const handleNameChange = (newName: string) => {
@@ -404,11 +467,21 @@
 <div {id} popover="auto" class="a-popover editor-popover" {...rest}>
   <div class="form-header">
     <h2 class="a-panel-title">
-      {node?.meta.nodeType === "token-set"
-        ? "Token Set"
-        : node?.meta.nodeType === "token-group"
-          ? "Group"
-          : "Token"}
+      {#if node?.meta.nodeType === "token-set"}
+        Set
+      {/if}
+      {#if node?.meta.nodeType === "token-modifier"}
+        Modifier
+      {/if}
+      {#if node?.meta.nodeType === "token-context"}
+        Modifier Context
+      {/if}
+      {#if node?.meta.nodeType === "token-group"}
+        Group
+      {/if}
+      {#if node?.meta.nodeType === "token"}
+        Token
+      {/if}
     </h2>
     <button
       class="a-button"
@@ -1097,6 +1170,33 @@
               updateMeta({ value });
             }}
           />
+        </div>
+      {/if}
+
+      {#if node?.meta.nodeType === "token-modifier"}
+        {@const contexts = getModifierContexts(node.nodeId)}
+        <div class="form-group">
+          <label class="a-label" for="default-context-select"
+            >Default Context</label
+          >
+          <select
+            id="default-context-select"
+            class="a-field"
+            value={node.meta.default?.ref ?? ""}
+            onchange={(e) => {
+              const value = e.currentTarget.value;
+              updateMeta({
+                default: value ? { ref: value } : undefined,
+              });
+            }}
+          >
+            <option class="a-item" value="">None</option>
+            {#each contexts as context}
+              <option class="a-item" value={context.nodeId}>
+                {context.name}
+              </option>
+            {/each}
+          </select>
         </div>
       {/if}
     </div>
