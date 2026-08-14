@@ -1071,6 +1071,148 @@ describe("parseTokenResolver", () => {
 });
 
 describe("serializeTokenResolver", () => {
+  test("rejects a modifier context extension into another context", () => {
+    const resolver = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "Theme",
+          contexts: {
+            light: [{ local: {} }],
+            dark: [{ foreign: {} }],
+          },
+        },
+      ],
+    });
+    const lightContext = resolver.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-context" && node.meta.name === "light",
+    );
+    const darkContext = resolver.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-context" && node.meta.name === "dark",
+    );
+    const local = resolver.nodes.find(
+      (node) =>
+        node.parentId === lightContext?.nodeId &&
+        node.meta.nodeType === "token-group",
+    );
+    const foreign = resolver.nodes.find(
+      (node) =>
+        node.parentId === darkContext?.nodeId &&
+        node.meta.nodeType === "token-group",
+    );
+    if (local?.meta.nodeType !== "token-group" || !foreign) {
+      throw new Error("Expected context groups to parse");
+    }
+    local.meta.extends = { ref: foreign.nodeId };
+
+    expect(() =>
+      serializeTokenResolver(
+        new Map(resolver.nodes.map((node) => [node.nodeId, node])),
+      ),
+    ).toThrow(
+      'Failed to serialize modifier "Theme" context "light": Group "local" extension target',
+    );
+  });
+
+  test("rejects a set extension into a modifier context", () => {
+    const resolver = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "Foundation",
+          sources: [{ local: {} }],
+        },
+        {
+          type: "modifier",
+          name: "Theme",
+          contexts: { light: [{ foreign: {} }] },
+        },
+      ],
+    });
+    const setNode = resolver.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-set" && node.meta.name === "Foundation",
+    );
+    const contextNode = resolver.nodes.find(
+      (node) => node.meta.nodeType === "token-context",
+    );
+    const local = resolver.nodes.find(
+      (node) =>
+        node.parentId === setNode?.nodeId &&
+        node.meta.nodeType === "token-group",
+    );
+    const foreign = resolver.nodes.find(
+      (node) =>
+        node.parentId === contextNode?.nodeId &&
+        node.meta.nodeType === "token-group",
+    );
+    if (local?.meta.nodeType !== "token-group" || !foreign) {
+      throw new Error("Expected set and context groups to parse");
+    }
+    local.meta.extends = { ref: foreign.nodeId };
+
+    expect(() =>
+      serializeTokenResolver(
+        new Map(resolver.nodes.map((node) => [node.nodeId, node])),
+      ),
+    ).toThrow(
+      'Failed to serialize set "Foundation": Group "local" extension target',
+    );
+  });
+
+  test("serializes a renamed and moved cross-set group extension path", () => {
+    const resolver = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "Foundation",
+          sources: [
+            {
+              base: { value: { $type: "number", $value: 1 } },
+              destination: {},
+            },
+          ],
+        },
+        {
+          type: "set",
+          name: "Components",
+          sources: [{ derived: { $extends: "{base}" } }],
+        },
+      ],
+    });
+    const foundation = resolver.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-set" && node.meta.name === "Foundation",
+    );
+    const base = resolver.nodes.find(
+      (node) =>
+        node.parentId === foundation?.nodeId && node.meta.name === "base",
+    );
+    const destination = resolver.nodes.find(
+      (node) =>
+        node.parentId === foundation?.nodeId &&
+        node.meta.name === "destination",
+    );
+    if (!base || !destination) throw new Error("Expected set groups to parse");
+    base.meta.name = "renamed";
+    base.parentId = destination.nodeId;
+
+    const serialized = serializeTokenResolver(
+      new Map(resolver.nodes.map((node) => [node.nodeId, node])),
+    );
+    expect(serialized.resolutionOrder[1]).toEqual(
+      expect.objectContaining({
+        name: "Components",
+        sources: [{ derived: { $extends: "{destination.renamed}" } }],
+      }),
+    );
+  });
+
   test("serializes single set with simple tokens", () => {
     const resolver = parseTokenResolver({
       version: "2025.10",

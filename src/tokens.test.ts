@@ -1422,6 +1422,78 @@ describe("serializeDesignTokens", () => {
     });
   });
 
+  test("rejects a token $extends target during serialization", () => {
+    const parsed = parseDesignTokens({
+      base: { value: { $type: "number", $value: 1 } },
+      derived: {},
+    });
+    const target = parsed.nodes.find(
+      (node) => node.meta.nodeType === "token" && node.meta.name === "value",
+    );
+    const derived = parsed.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-group" && node.meta.name === "derived",
+    );
+    if (!target || derived?.meta.nodeType !== "token-group") {
+      throw new Error("Expected token and group to parse");
+    }
+    derived.meta.extends = { ref: target.nodeId };
+
+    expect(() => serializeDesignTokens(nodesToMap(parsed.nodes))).toThrow(
+      'Group "derived" cannot extend token "base.value"',
+    );
+  });
+
+  test("rejects a missing $extends target during serialization", () => {
+    const parsed = parseDesignTokens({ derived: {} });
+    const derived = parsed.nodes[0];
+    if (derived?.meta.nodeType !== "token-group") {
+      throw new Error("Expected group to parse");
+    }
+    derived.meta.extends = { ref: "missing-group" };
+
+    expect(() => serializeDesignTokens(nodesToMap(parsed.nodes))).toThrow(
+      'Group "derived" extension target "missing-group" not found',
+    );
+  });
+
+  test("rejects a self-referencing $extends during serialization", () => {
+    const parsed = parseDesignTokens({ derived: {} });
+    const derived = parsed.nodes[0];
+    if (derived?.meta.nodeType !== "token-group") {
+      throw new Error("Expected group to parse");
+    }
+    derived.meta.extends = { ref: derived.nodeId };
+
+    expect(() => serializeDesignTokens(nodesToMap(parsed.nodes))).toThrow(
+      "Circular group extension detected: derived -> derived",
+    );
+  });
+
+  test("rejects a three-group $extends cycle during serialization", () => {
+    const parsed = parseDesignTokens({ first: {}, second: {}, third: {} });
+    const groups = new Map(
+      parsed.nodes.map((node) => [node.meta.name, node] as const),
+    );
+    const first = groups.get("first");
+    const second = groups.get("second");
+    const third = groups.get("third");
+    if (
+      first?.meta.nodeType !== "token-group" ||
+      second?.meta.nodeType !== "token-group" ||
+      third?.meta.nodeType !== "token-group"
+    ) {
+      throw new Error("Expected groups to parse");
+    }
+    first.meta.extends = { ref: second.nodeId };
+    second.meta.extends = { ref: third.nodeId };
+    third.meta.extends = { ref: first.nodeId };
+
+    expect(() => serializeDesignTokens(nodesToMap(parsed.nodes))).toThrow(
+      "Circular group extension detected: first -> second -> third -> first",
+    );
+  });
+
   test("preserves deprecated flags", () => {
     const input = {
       oldToken: {

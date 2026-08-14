@@ -672,6 +672,30 @@ export const serializeTokenResolver = (
     return subtree;
   };
 
+  const setAvailableNodes = new Map<string, TreeNode<TreeNodeMeta>>();
+  for (const rootNode of rootNodes) {
+    if (rootNode.meta.nodeType !== "token-set") continue;
+    for (const [nodeId, node] of collectDescendants(rootNode.nodeId)) {
+      setAvailableNodes.set(nodeId, node);
+    }
+  }
+
+  const serializeSource = (
+    subtree: Map<string, TreeNode<TreeNodeMeta>>,
+    availableNodes: Map<string, TreeNode<TreeNodeMeta>>,
+    owner: string,
+  ): ReturnType<typeof serializeDesignTokens> => {
+    try {
+      return serializeDesignTokens(
+        subtree as Map<string, TreeNode<TokenMeta | GroupMeta>>,
+        availableNodes as Map<string, TreeNode<TokenMeta | GroupMeta>>,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw Error(`Failed to serialize ${owner}: ${message}`);
+    }
+  };
+
   for (const rootNode of rootNodes) {
     if (rootNode.meta.nodeType === "token-set") {
       const setNode = rootNode;
@@ -679,9 +703,10 @@ export const serializeTokenResolver = (
       // serializeDesignTokens expects token and group nodes, not token-set nodes
       const setSubtree = collectDescendants(setNode.nodeId);
 
-      const source = serializeDesignTokens(
-        setSubtree as Map<string, TreeNode<TokenMeta | GroupMeta>>,
-        nodes as Map<string, TreeNode<TokenMeta | GroupMeta>>, // Pass all nodes for cross-set reference lookup
+      const source = serializeSource(
+        setSubtree,
+        setAvailableNodes,
+        `set "${setNode.meta.name}"`,
       );
       resolutionOrder.push({
         type: "set",
@@ -711,12 +736,17 @@ export const serializeTokenResolver = (
     for (const contextNode of contextNodes) {
       // Create subtree containing only this context's descendants
       const contextSubtree = collectDescendants(contextNode.nodeId);
+      const contextAvailableNodes = new Map(setAvailableNodes);
+      for (const [nodeId, node] of contextSubtree) {
+        contextAvailableNodes.set(nodeId, node);
+      }
 
       // Serialize tokens/groups under this context
       // Note: serializeDesignTokens inlines all sources
-      const serialized = serializeDesignTokens(
-        contextSubtree as Map<string, TreeNode<TokenMeta | GroupMeta>>,
-        nodes as Map<string, TreeNode<TokenMeta | GroupMeta>>, // Pass all nodes for cross-set reference lookup
+      const serialized = serializeSource(
+        contextSubtree,
+        contextAvailableNodes,
+        `modifier "${modifierNode.meta.name}" context "${contextNode.meta.name}"`,
       );
       contexts[contextNode.meta.name] = [serialized];
     }

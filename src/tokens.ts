@@ -518,6 +518,49 @@ export const serializeDesignTokens = (
   };
   buildPathMap(undefined);
 
+  const validateGroupExtension = (groupNode: TreeNode<GroupMeta>): void => {
+    const visitedAt = new Map<string, number>();
+    const chain: string[] = [];
+    let current = groupNode;
+
+    while (true) {
+      const currentPath = nodeIdToPath.get(current.nodeId) ?? current.nodeId;
+      const cycleStart = visitedAt.get(current.nodeId);
+      if (cycleStart !== undefined) {
+        throw Error(
+          `Circular group extension detected: ${[
+            ...chain.slice(cycleStart),
+            currentPath,
+          ].join(" -> ")}`,
+        );
+      }
+      visitedAt.set(current.nodeId, chain.length);
+      chain.push(currentPath);
+
+      const extension = current.meta.extends;
+      if (!extension) return;
+      const target = availableNodes.get(extension.ref);
+      if (!target) {
+        throw Error(
+          `Group "${currentPath}" extension target "${extension.ref}" not found`,
+        );
+      }
+      const targetPath = nodeIdToPath.get(target.nodeId) ?? target.nodeId;
+      if (target.meta.nodeType !== "token-group") {
+        throw Error(
+          `Group "${currentPath}" cannot extend ${target.meta.nodeType === "token" ? "token" : "node"} "${targetPath}"`,
+        );
+      }
+      current = target as TreeNode<GroupMeta>;
+    }
+  };
+
+  for (const node of nodes.values()) {
+    if (node.meta.nodeType === "token-group" && node.meta.extends) {
+      validateGroupExtension(node as TreeNode<GroupMeta>);
+    }
+  }
+
   const serializeNode = (
     node: TreeNode<TreeNodeMeta>,
     inheritedType: undefined | string,
@@ -533,7 +576,9 @@ export const serializeDesignTokens = (
         ? nodeIdToPath.get(meta.extends.ref)
         : undefined;
       if (meta.extends && !extendedPath) {
-        throw Error(`Extended group for ${meta.extends.ref} not found`);
+        throw Error(
+          `Group "${nodeIdToPath.get(node.nodeId) ?? node.nodeId}" extension target "${meta.extends.ref}" has no serializable path`,
+        );
       }
       const group: Group = {
         $type: type,
