@@ -610,6 +610,42 @@ describe("generateCssVariables", () => {
       "--typography-body: var(--weights-normal) var(--sizes-base)/1.5 var(--fonts-body)",
     );
   });
+
+  test("generates effective inherited variables under the extending path", () => {
+    const parsed = parseDesignTokens({
+      target: { $type: "number", $value: 1 },
+      base: {
+        alias: { $type: "number", $value: "{target}" },
+        replaced: { $type: "number", $value: 2 },
+        nested: {
+          inherited: { $type: "number", $value: 3 },
+          replaced: { $type: "number", $value: 4 },
+        },
+      },
+      middle: {
+        $extends: "{base}",
+        middleOnly: { $type: "number", $value: 5 },
+      },
+      derived: {
+        $extends: "{middle}",
+        replaced: { $type: "number", $value: 6 },
+        nested: {
+          replaced: { $type: "number", $value: 7 },
+          local: { $type: "number", $value: 8 },
+        },
+      },
+    });
+
+    const css = generateCssVariables(nodesToMap(parsed.nodes));
+
+    expect(css).toContain("--derived-alias: var(--target);");
+    expect(css).toContain("--derived-replaced: 6;");
+    expect(css).toContain("--derived-middle-only: 5;");
+    expect(css).toContain("--derived-nested-inherited: 3;");
+    expect(css).toContain("--derived-nested-replaced: 7;");
+    expect(css).toContain("--derived-nested-local: 8;");
+    expect(css).not.toContain("--derived-replaced: 2;");
+  });
 });
 
 describe("parseCssVariables", () => {

@@ -581,6 +581,42 @@ describe("generateScssVariables", () => {
     );
   });
 
+  test("generates effective inherited variables under the extending path", () => {
+    const parsed = parseDesignTokens({
+      target: { $type: "number", $value: 1 },
+      base: {
+        alias: { $type: "number", $value: "{target}" },
+        replaced: { $type: "number", $value: 2 },
+        nested: {
+          inherited: { $type: "number", $value: 3 },
+          replaced: { $type: "number", $value: 4 },
+        },
+      },
+      middle: {
+        $extends: "{base}",
+        middleOnly: { $type: "number", $value: 5 },
+      },
+      derived: {
+        $extends: "{middle}",
+        replaced: { $type: "number", $value: 6 },
+        nested: {
+          replaced: { $type: "number", $value: 7 },
+          local: { $type: "number", $value: 8 },
+        },
+      },
+    });
+
+    const scss = generateScssVariables(nodesToMap(parsed.nodes));
+
+    expect(scss).toContain("$derived-alias: $target;");
+    expect(scss).toContain("$derived-replaced: 6;");
+    expect(scss).toContain("$derived-middle-only: 5;");
+    expect(scss).toContain("$derived-nested-inherited: 3;");
+    expect(scss).toContain("$derived-nested-replaced: 7;");
+    expect(scss).toContain("$derived-nested-local: 8;");
+    expect(scss).not.toContain("$derived-replaced: 2;");
+  });
+
   test("skips modifier nodes and their entire subtrees", () => {
     const result = parseTokenResolver({
       version: "2025.10",
