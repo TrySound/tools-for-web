@@ -267,6 +267,27 @@ export const resolverSourceSchema = z.record(
 
 export type ResolverSource = z.infer<typeof resolverSourceSchema>;
 
+export const resolverReferenceSchema = z.object({
+  $ref: z.string(),
+});
+
+export type ResolverReference = z.infer<typeof resolverReferenceSchema>;
+
+export const rawResolverSourceSchema = z.union([
+  resolverSourceSchema,
+  resolverReferenceSchema,
+]);
+
+export type RawResolverSource = z.infer<typeof rawResolverSourceSchema>;
+
+export const resolverSetDefinitionSchema = z.object({
+  sources: z.array(resolverSourceSchema),
+  description: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type ResolverSetDefinition = z.infer<typeof resolverSetDefinitionSchema>;
+
 // Set in resolutionOrder array - collection of design tokens
 export const resolverSetSchema = z.object({
   type: z.literal("set"),
@@ -283,6 +304,17 @@ export const resolverModifierContextsSchema = z.record(
   z.string(), // context name (e.g., "light", "dark")
   z.array(resolverSourceSchema), // sources array (non-optional)
 );
+
+export const resolverModifierDefinitionSchema = z.object({
+  contexts: resolverModifierContextsSchema,
+  description: z.optional(z.string()),
+  default: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type ResolverModifierDefinition = z.infer<
+  typeof resolverModifierDefinitionSchema
+>;
 
 // Modifier in resolutionOrder - for documentation, parsed but skipped
 export const resolverModifierSchema = z.object({
@@ -304,18 +336,15 @@ export const resolutionOrderItemSchema = z.union([
 
 export type ResolutionOrderItem = z.infer<typeof resolutionOrderItemSchema>;
 
-// Unsupported root-level sets and modifiers
-// These reject any object with properties - only allow undefined or empty object
-const unsupportedSetsSchema = z.optional(z.strictObject({}));
-const unsupportedModifiersSchema = z.optional(z.strictObject({}));
-
 // Resolver document following Design Tokens Resolver Module 2025.10
 export const resolverDocumentSchema = z.object({
   version: z.literal("2025.10"),
   name: z.optional(z.string()),
   description: z.optional(z.string()),
-  sets: z.optional(unsupportedSetsSchema),
-  modifiers: z.optional(unsupportedModifiersSchema),
+  $schema: z.optional(z.string()),
+  $defs: z.optional(z.record(z.string(), z.unknown())),
+  sets: z.optional(z.record(z.string(), resolverSetDefinitionSchema)),
+  modifiers: z.optional(z.record(z.string(), resolverModifierDefinitionSchema)),
   resolutionOrder: z.array(resolutionOrderItemSchema),
 });
 

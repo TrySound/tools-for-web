@@ -73,22 +73,34 @@ describe("parseTokenResolver", () => {
     expect(result.errors[0].message).toContain("version");
   });
 
-  test("rejects root-level sets object with property keys", () => {
+  test("accepts root-level set definitions referenced by resolutionOrder", () => {
     const result = parseTokenResolver({
       version: "2025.10",
       sets: { someSet: { sources: [] } },
-      resolutionOrder: [],
-    } as unknown);
-    expect(result.errors.length).toBeGreaterThan(0);
+      resolutionOrder: [{ $ref: "#/sets/someSet" }],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    expect(
+      result.nodes.find((node) => node.meta.nodeType === "token-set")?.meta
+        .name,
+    ).toBe("someSet");
   });
 
-  test("rejects root-level modifiers object with property keys", () => {
+  test("accepts root-level modifier definitions referenced by resolutionOrder", () => {
     const result = parseTokenResolver({
       version: "2025.10",
-      modifiers: { someModifier: { contexts: {} } },
-      resolutionOrder: [],
-    } as unknown);
-    expect(result.errors.length).toBeGreaterThan(0);
+      modifiers: {
+        someModifier: { contexts: { enabled: [], disabled: [] } },
+      },
+      resolutionOrder: [{ $ref: "#/modifiers/someModifier" }],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    expect(
+      result.nodes.find((node) => node.meta.nodeType === "token-modifier")?.meta
+        .name,
+    ).toBe("someModifier");
   });
 
   test("accepts valid minimal resolver with empty resolutionOrder", () => {
@@ -655,6 +667,222 @@ describe("parseTokenResolver", () => {
       ],
     });
     expect(result.errors).toHaveLength(0);
+  });
+
+  test("normalizes escaped root references while preserving mixed array order", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      sets: {
+        "core/palette~": {
+          description: "Referenced set",
+          sources: [],
+        },
+      },
+      modifiers: {
+        theme: {
+          contexts: { light: [], dark: [] },
+        },
+      },
+      resolutionOrder: [
+        { $ref: "#/modifiers/theme" },
+        { type: "set", name: "Inline", sources: [] },
+        { $ref: "#/sets/core~1palette~0" },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    expect(
+      result.nodes
+        .filter((node) => node.parentId === undefined)
+        .map((node) => [node.meta.nodeType, node.meta.name]),
+    ).toEqual([
+      ["token-modifier", "theme"],
+      ["token-set", "Inline"],
+      ["token-set", "core/palette~"],
+    ]);
+
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+    expect(
+      serialized.resolutionOrder.map(({ type, name }) => [type, name]),
+    ).toEqual([
+      ["modifier", "theme"],
+      ["set", "Inline"],
+      ["set", "core/palette~"],
+    ]);
+    expect(serialized).not.toHaveProperty("sets");
+    expect(serialized).not.toHaveProperty("modifiers");
+  });
+
+  test("materializes $defs sources and merges source arrays in order", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      $defs: {
+        "base/tokens": {
+          color: {
+            $type: "color",
+            $value: { colorSpace: "srgb", components: [1, 0, 0] },
+          },
+          spacing: {
+            $type: "dimension",
+            $value: { value: 4, unit: "px" },
+          },
+        },
+      },
+      sets: {
+        foundation: {
+          sources: [
+            { $ref: "#/$defs/base~1tokens" },
+            {
+              color: {
+                $type: "color",
+                $value: { colorSpace: "srgb", components: [0, 0, 1] },
+              },
+            },
+          ],
+        },
+      },
+      resolutionOrder: [{ $ref: "#/sets/foundation" }],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+    const set = serialized.resolutionOrder[0];
+    expect(set.type).toBe("set");
+    if (set.type !== "set") throw new Error("Expected a set");
+    expect(set.sources).toHaveLength(1);
+    expect(set.sources[0]).toMatchObject({
+      color: {
+        $value: { colorSpace: "srgb", components: [0, 0, 1] },
+      },
+      spacing: { $value: { value: 4, unit: "px" } },
+    });
+    expect(JSON.stringify(serialized)).not.toContain("$ref");
+  });
+
+  test("expands a set reference inside a modifier context at its array position", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      sets: {
+        base: {
+          sources: [
+            {
+              color: {
+                $type: "color",
+                $value: { colorSpace: "srgb", components: [1, 0, 0] },
+              },
+            },
+            {
+              spacing: {
+                $type: "dimension",
+                $value: { value: 4, unit: "px" },
+              },
+            },
+          ],
+        },
+      },
+      modifiers: {
+        theme: {
+          contexts: {
+            dark: [
+              { $ref: "#/sets/base" },
+              {
+                color: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                },
+              },
+            ],
+          },
+        },
+      },
+      resolutionOrder: [{ $ref: "#/modifiers/theme" }],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+    const modifier = serialized.resolutionOrder[0];
+    expect(modifier.type).toBe("modifier");
+    if (modifier.type !== "modifier") throw new Error("Expected a modifier");
+    expect(modifier.contexts.dark).toHaveLength(1);
+    expect(modifier.contexts.dark[0]).toMatchObject({
+      color: {
+        $value: { colorSpace: "srgb", components: [0, 0, 0] },
+      },
+      spacing: { $value: { value: 4, unit: "px" } },
+    });
+  });
+
+  test.each([
+    {
+      name: "set sources referencing modifiers",
+      document: {
+        version: "2025.10",
+        modifiers: { theme: { contexts: { dark: [] } } },
+        resolutionOrder: [
+          {
+            type: "set",
+            name: "Invalid",
+            sources: [{ $ref: "#/modifiers/theme" }],
+          },
+        ],
+      },
+      path: "/resolutionOrder/0/sources/0/$ref",
+    },
+    {
+      name: "modifier contexts referencing modifiers",
+      document: {
+        version: "2025.10",
+        modifiers: {
+          base: { contexts: { dark: [] } },
+          derived: {
+            contexts: { dark: [{ $ref: "#/modifiers/base" }] },
+          },
+        },
+        resolutionOrder: [{ $ref: "#/modifiers/derived" }],
+      },
+      path: "/modifiers/derived/contexts/dark/0/$ref",
+    },
+    {
+      name: "any references into resolutionOrder",
+      document: {
+        version: "2025.10",
+        sets: {
+          invalid: { sources: [{ $ref: "#/resolutionOrder/0" }] },
+        },
+        resolutionOrder: [{ type: "set", name: "Inline", sources: [] }],
+      },
+      path: "/sets/invalid/sources/0/$ref",
+    },
+  ])("rejects $name", ({ document, path }) => {
+    const result = parseTokenResolver(document);
+
+    expect(result.errors).toContainEqual({
+      path,
+      message: expect.stringContaining("not allowed"),
+    });
+  });
+
+  test.each([
+    ["a $defs object", "#/$defs/source"],
+    ["an external document", "tokens.json"],
+    ["a missing definition", "#/sets/missing"],
+  ])("rejects a resolutionOrder reference to %s", (_name, $ref) => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      $defs: { source: {} },
+      resolutionOrder: [{ $ref }],
+    });
+
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors.some((error) => error.path.includes("/0/$ref"))).toBe(
+      true,
+    );
   });
 });
 

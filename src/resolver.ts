@@ -7,6 +7,11 @@ import {
   type ResolverModifier,
 } from "./dtcg.schema";
 import {
+  materializeJsonReferences,
+  resolveJsonPointer,
+  type JsonReferenceError,
+} from "./json-pointer";
+import {
   serializeDesignTokens,
   extractIntermediaryNodes,
   resolveIntermediaryNodes,
@@ -26,6 +31,245 @@ import type { TreeNode } from "./store";
 type ParseResult = {
   nodes: TreeNode<TreeNodeMeta>[];
   errors: Array<{ path: string; message: string }>;
+};
+
+type RootDefinition = {
+  type: "set" | "modifier";
+  name: string;
+  value: Record<string, unknown>;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const encodePointerSegment = (segment: string): string =>
+  segment.replaceAll("~", "~0").replaceAll("/", "~1");
+
+const localPointerSegments = (reference: string): string[] | undefined => {
+  if (!reference.startsWith("#")) return undefined;
+
+  let pointer: string;
+  try {
+    pointer = decodeURIComponent(reference.slice(1));
+  } catch {
+    return undefined;
+  }
+  if (pointer === "") return [];
+  if (!pointer.startsWith("/")) return undefined;
+
+  const segments: string[] = [];
+  for (const segment of pointer.slice(1).split("/")) {
+    if (/~(?![01])/u.test(segment)) return undefined;
+    segments.push(segment.replaceAll("~1", "/").replaceAll("~0", "~"));
+  }
+  return segments;
+};
+
+const findRootDefinition = (
+  root: unknown,
+  reference: string,
+): RootDefinition | undefined => {
+  if (!isRecord(root)) return undefined;
+  const target = resolveJsonPointer(root, reference);
+
+  for (const type of ["set", "modifier"] as const) {
+    const definitions = root[`${type}s`];
+    if (!isRecord(definitions)) continue;
+    for (const [name, value] of Object.entries(definitions)) {
+      if (value === target && isRecord(value)) return { type, name, value };
+    }
+  }
+  return undefined;
+};
+
+const referenceOf = (value: unknown): string | undefined =>
+  isRecord(value) && typeof value.$ref === "string" ? value.$ref : undefined;
+
+const validateResolverReferences = (input: unknown): JsonReferenceError[] => {
+  const errors: JsonReferenceError[] = [];
+
+  const visit = (value: unknown, path: string): void => {
+    if (Array.isArray(value)) {
+      value.forEach((child, index) => visit(child, `${path}/${index}`));
+      return;
+    }
+    if (!isRecord(value)) return;
+
+    const reference = referenceOf(value);
+    if (reference) {
+      const segments = localPointerSegments(reference);
+      const isResolutionOrderItem = /^\/resolutionOrder\/\d+$/u.test(path);
+      if (segments?.[0] === "resolutionOrder") {
+        errors.push({
+          path: `${path}/$ref`,
+          message: `References into resolutionOrder are not allowed: "${reference}"`,
+        });
+      }
+      if (segments?.[0] === "modifiers" && !isResolutionOrderItem) {
+        errors.push({
+          path: `${path}/$ref`,
+          message: `References to modifiers are not allowed here: "${reference}"`,
+        });
+      }
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== "$extensions") {
+        visit(child, `${path}/${encodePointerSegment(key)}`);
+      }
+    }
+  };
+
+  visit(input, "");
+  return errors;
+};
+
+const normalizeResolverDocument = (
+  input: unknown,
+): { value: unknown; errors: JsonReferenceError[] } => {
+  const errors = validateResolverReferences(input);
+  const materialized = materializeJsonReferences(input);
+  errors.push(...materialized.errors);
+
+  if (!isRecord(input) || !isRecord(materialized.value)) {
+    return { value: materialized.value, errors };
+  }
+  const materializedRoot = materialized.value;
+
+  const normalizeSources = (
+    rawSources: unknown,
+    materializedSources: unknown,
+    allowSetReferences: boolean,
+  ): unknown => {
+    if (!Array.isArray(rawSources) || !Array.isArray(materializedSources)) {
+      return materializedSources;
+    }
+
+    const sources: unknown[] = [];
+    rawSources.forEach((rawSource, index) => {
+      const reference = referenceOf(rawSource);
+      const definition = reference
+        ? findRootDefinition(input, reference)
+        : undefined;
+      const source = materializedSources[index];
+      if (
+        allowSetReferences &&
+        definition?.type === "set" &&
+        isRecord(source) &&
+        Array.isArray(source.sources)
+      ) {
+        sources.push(...source.sources);
+      } else {
+        sources.push(source);
+      }
+    });
+    return sources;
+  };
+
+  const normalizeDefinition = (
+    rawDefinition: unknown,
+    materializedDefinition: unknown,
+    type: "set" | "modifier",
+  ): unknown => {
+    if (!isRecord(rawDefinition) || !isRecord(materializedDefinition)) {
+      return materializedDefinition;
+    }
+    if (type === "set") {
+      return {
+        ...materializedDefinition,
+        sources: normalizeSources(
+          rawDefinition.sources,
+          materializedDefinition.sources,
+          false,
+        ),
+      };
+    }
+
+    const rawContexts = rawDefinition.contexts;
+    const materializedContexts = materializedDefinition.contexts;
+    if (!isRecord(rawContexts) || !isRecord(materializedContexts)) {
+      return materializedDefinition;
+    }
+    return {
+      ...materializedDefinition,
+      contexts: Object.fromEntries(
+        Object.keys(materializedContexts).map((name) => [
+          name,
+          normalizeSources(rawContexts[name], materializedContexts[name], true),
+        ]),
+      ),
+    };
+  };
+
+  const normalizeDefinitions = (type: "set" | "modifier"): unknown => {
+    const rawDefinitions = input[`${type}s`];
+    const materializedDefinitions = materializedRoot[`${type}s`];
+    if (!isRecord(rawDefinitions) || !isRecord(materializedDefinitions)) {
+      return materializedDefinitions;
+    }
+    return Object.fromEntries(
+      Object.keys(materializedDefinitions).map((name) => [
+        name,
+        normalizeDefinition(
+          rawDefinitions[name],
+          materializedDefinitions[name],
+          type,
+        ),
+      ]),
+    );
+  };
+
+  const rawOrder = input.resolutionOrder;
+  const materializedOrder = materializedRoot.resolutionOrder;
+  if (!Array.isArray(rawOrder) || !Array.isArray(materializedOrder)) {
+    return { value: materializedRoot, errors };
+  }
+
+  const resolutionOrder = rawOrder.map((rawItem, index) => {
+    const materializedItem = materializedOrder[index];
+    const reference = referenceOf(rawItem);
+    const definition = reference
+      ? findRootDefinition(input, reference)
+      : undefined;
+
+    if (reference && !definition) {
+      errors.push({
+        path: `/resolutionOrder/${index}/$ref`,
+        message: `resolutionOrder references must target a root set or modifier: "${reference}"`,
+      });
+      return materializedItem;
+    }
+
+    const type =
+      definition?.type ?? (isRecord(rawItem) ? rawItem.type : undefined);
+    const name =
+      definition?.name ?? (isRecord(rawItem) ? rawItem.name : undefined);
+    const rawDefinition =
+      definition && isRecord(rawItem)
+        ? {
+            ...definition.value,
+            ...Object.fromEntries(
+              Object.entries(rawItem).filter(([key]) => key !== "$ref"),
+            ),
+          }
+        : rawItem;
+    const normalized = normalizeDefinition(
+      rawDefinition,
+      materializedItem,
+      type === "modifier" ? "modifier" : "set",
+    );
+    return isRecord(normalized) ? { ...normalized, type, name } : normalized;
+  });
+
+  return {
+    value: {
+      ...materializedRoot,
+      sets: normalizeDefinitions("set"),
+      modifiers: normalizeDefinitions("modifier"),
+      resolutionOrder,
+    },
+    errors,
+  };
 };
 
 // Helper function to deep merge sources respecting path-based order
@@ -87,8 +331,13 @@ export const isResolverFormat = (obj: unknown): boolean => {
 // Phase 1: Extract intermediary nodes from all sets (collect what tokens/groups exist)
 // Phase 2: Resolve with all accumulated nodes available (enables cross-set references)
 export const parseTokenResolver = (input: unknown): ParseResult => {
+  const normalized = normalizeResolverDocument(input);
+  if (normalized.errors.length > 0) {
+    return { nodes: [], errors: normalized.errors };
+  }
+
   // Validate resolver document structure
-  const validation = resolverDocumentSchema.safeParse(input);
+  const validation = resolverDocumentSchema.safeParse(normalized.value);
 
   if (!validation.success) {
     const errorMessage = z.prettifyError(validation.error);
@@ -326,23 +575,21 @@ export const serializeTokenResolver = (
   nodes: Map<string, TreeNode<TreeNodeMeta>>,
   metadata?: { name?: string; description?: string },
 ): ResolverDocument => {
-  const setNodes: Array<TreeNode<SetMeta>> = [];
-  const modifierNodes: Array<TreeNode<ModifierMeta>> = [];
+  const rootNodes: Array<TreeNode<SetMeta> | TreeNode<ModifierMeta>> = [];
 
   for (const node of nodes.values()) {
     if (node.parentId === undefined) {
       if (node.meta.nodeType === "token-set") {
-        setNodes.push(node as TreeNode<SetMeta>);
+        rootNodes.push(node as TreeNode<SetMeta>);
       }
       if (node.meta.nodeType === "token-modifier") {
-        modifierNodes.push(node as TreeNode<ModifierMeta>);
+        rootNodes.push(node as TreeNode<ModifierMeta>);
       }
     }
   }
 
   // Sort by index to maintain document order
-  setNodes.sort(compareTreeNodes);
-  modifierNodes.sort(compareTreeNodes);
+  rootNodes.sort((a, b) => compareTreeNodes<SetMeta | ModifierMeta>(a, b));
 
   const resolutionOrder: (ResolverSet | ResolverModifier)[] = [];
 
@@ -387,27 +634,28 @@ export const serializeTokenResolver = (
     return subtree;
   };
 
-  // Serialize sets
-  for (const setNode of setNodes) {
-    // Create a filtered map containing only this set's descendants (excluding the set node itself)
-    // serializeDesignTokens expects token and group nodes, not token-set nodes
-    const setSubtree = collectDescendants(setNode.nodeId);
+  for (const rootNode of rootNodes) {
+    if (rootNode.meta.nodeType === "token-set") {
+      const setNode = rootNode;
+      // Create a filtered map containing only this set's descendants (excluding the set node itself)
+      // serializeDesignTokens expects token and group nodes, not token-set nodes
+      const setSubtree = collectDescendants(setNode.nodeId);
 
-    const source = serializeDesignTokens(
-      setSubtree as Map<string, TreeNode<TokenMeta | GroupMeta>>,
-      nodes as Map<string, TreeNode<TokenMeta | GroupMeta>>, // Pass all nodes for cross-set reference lookup
-    );
-    resolutionOrder.push({
-      type: "set",
-      name: setNode.meta.name,
-      description: setNode.meta.description,
-      $extensions: setNode.meta.extensions,
-      sources: [source],
-    });
-  }
+      const source = serializeDesignTokens(
+        setSubtree as Map<string, TreeNode<TokenMeta | GroupMeta>>,
+        nodes as Map<string, TreeNode<TokenMeta | GroupMeta>>, // Pass all nodes for cross-set reference lookup
+      );
+      resolutionOrder.push({
+        type: "set",
+        name: setNode.meta.name,
+        description: setNode.meta.description,
+        $extensions: setNode.meta.extensions,
+        sources: [source],
+      });
+      continue;
+    }
 
-  // Serialize modifiers
-  for (const modifierNode of modifierNodes) {
+    const modifierNode = rootNode as TreeNode<ModifierMeta>;
     // Collect all context nodes for this modifier
     const contextNodes: Array<TreeNode<ContextMeta>> = [];
     for (const node of nodes.values()) {
