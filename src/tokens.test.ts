@@ -1123,6 +1123,130 @@ describe("parseDesignTokens", () => {
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].path).toBe("invalidBorder");
   });
+
+  test("materializes token value JSON references and serializes inline values", () => {
+    const result = parseDesignTokens({
+      numbers: {
+        $type: "number",
+        base: { $value: 4 },
+        copied: { $value: { $ref: "#/numbers/base/$value" } },
+      },
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(
+      result.nodes.find(
+        (node) => node.meta.nodeType === "token" && node.meta.name === "copied",
+      )?.meta,
+    ).toEqual(
+      expect.objectContaining({ nodeType: "token", type: "number", value: 4 }),
+    );
+    expect(serializeDesignTokens(nodesToMap(result.nodes))).toEqual({
+      numbers: {
+        $type: "number",
+        base: { $value: 4 },
+        copied: { $value: 4 },
+      },
+    });
+  });
+
+  test("materializes composite property JSON references and serializes inline values", () => {
+    const result = parseDesignTokens({
+      dimensions: {
+        $type: "dimension",
+        thin: { $value: { value: 1, unit: "px" } },
+      },
+      borders: {
+        $type: "border",
+        subtle: {
+          $value: {
+            color: { colorSpace: "srgb", components: [0.5, 0.5, 0.5] },
+            width: { $ref: "#/dimensions/thin/$value" },
+            style: "solid",
+          },
+        },
+      },
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(
+      result.nodes.find(
+        (node) => node.meta.nodeType === "token" && node.meta.name === "subtle",
+      )?.meta,
+    ).toEqual(
+      expect.objectContaining({
+        nodeType: "token",
+        type: "border",
+        value: {
+          color: { colorSpace: "srgb", components: [0.5, 0.5, 0.5] },
+          width: { value: 1, unit: "px" },
+          style: "solid",
+        },
+      }),
+    );
+    expect(serializeDesignTokens(nodesToMap(result.nodes))).toEqual({
+      dimensions: {
+        $type: "dimension",
+        thin: { $value: { value: 1, unit: "px" } },
+      },
+      borders: {
+        $type: "border",
+        subtle: {
+          $value: {
+            color: { colorSpace: "srgb", components: [0.5, 0.5, 0.5] },
+            width: { value: 1, unit: "px" },
+            style: "solid",
+          },
+        },
+      },
+    });
+  });
+
+  test("preserves opaque extension references while materializing token values", () => {
+    const result = parseDesignTokens({
+      base: { $type: "number", $value: 4 },
+      copied: {
+        $type: "number",
+        $value: { $ref: "#/base/$value" },
+        $extensions: {
+          "org.example": { metadata: { $ref: "#/base/$value" } },
+        },
+      },
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(serializeDesignTokens(nodesToMap(result.nodes))).toEqual({
+      base: { $type: "number", $value: 4 },
+      copied: {
+        $type: "number",
+        $value: 4,
+        $extensions: {
+          "org.example": { metadata: { $ref: "#/base/$value" } },
+        },
+      },
+    });
+  });
+
+  test("merges JSON reference errors while retaining valid parsed tokens", () => {
+    const result = parseDesignTokens({
+      valid: { $type: "number", $value: 4 },
+      broken: {
+        $type: "number",
+        $value: { $ref: "#/missing/$value" },
+      },
+    });
+
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0].meta.name).toBe("valid");
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        {
+          path: "/broken/$value/$ref",
+          message: 'JSON Pointer target not found: "#/missing/$value"',
+        },
+      ]),
+    );
+  });
 });
 
 describe("serializeDesignTokens", () => {

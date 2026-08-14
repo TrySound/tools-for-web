@@ -1,5 +1,5 @@
 // Zod schema based on Design Tokens Community Group specification
-// does not support JSON Pointer references
+// JSON Pointer references are materialized before these canonical schemas run.
 
 import * as z from "zod/mini";
 

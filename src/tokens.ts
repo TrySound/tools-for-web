@@ -22,6 +22,7 @@ import {
   type Group,
   type Token,
 } from "./dtcg.schema";
+import { materializeJsonReferences } from "./json-pointer";
 import { backwardCompatibleTokenSchema } from "./legacy.schema";
 
 type TreeNodeMeta = GroupMeta | TokenMeta;
@@ -409,13 +410,22 @@ export const resolveIntermediaryNodes = (
 };
 
 export const parseDesignTokens = (input: unknown): ParseResult => {
+  const { value: materializedInput, errors: materializationErrors } =
+    materializeJsonReferences(input);
   const { nodes: intermediaryNodes, errors: intermediaryErrors } =
-    extractIntermediaryNodes(input);
+    extractIntermediaryNodes(materializedInput);
   const { nodes, errors: resolverErrors } = resolveIntermediaryNodes(
     intermediaryNodes,
     intermediaryNodes,
   );
-  return { nodes, errors: [...intermediaryErrors, ...resolverErrors] };
+  return {
+    nodes,
+    errors: [
+      ...materializationErrors,
+      ...intermediaryErrors,
+      ...resolverErrors,
+    ],
+  };
 };
 
 export const serializeDesignTokens = (
