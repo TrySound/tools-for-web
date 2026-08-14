@@ -1247,6 +1247,71 @@ describe("parseDesignTokens", () => {
       ]),
     );
   });
+
+  test("stores group $extends as a reference to the target group", () => {
+    const result = parseDesignTokens({
+      base: {
+        value: { $type: "number", $value: 1 },
+      },
+      derived: {
+        $extends: "{base}",
+      },
+    });
+
+    expect(result.errors).toEqual([]);
+    const base = result.nodes.find((node) => node.meta.name === "base");
+    const derived = result.nodes.find((node) => node.meta.name === "derived");
+    expect(base?.meta.nodeType).toBe("token-group");
+    expect(derived?.meta).toEqual(
+      expect.objectContaining({
+        nodeType: "token-group",
+        extends: { ref: base?.nodeId },
+      }),
+    );
+  });
+
+  test("reports a missing $extends group target", () => {
+    const result = parseDesignTokens({
+      derived: { $extends: "{missing}" },
+    });
+
+    expect(result.errors).toContainEqual({
+      path: "derived",
+      message: 'Group extension target not found: "{missing}"',
+    });
+  });
+
+  test("rejects a token as an $extends target", () => {
+    const result = parseDesignTokens({
+      base: { $type: "number", $value: 1 },
+      derived: { $extends: "{base}" },
+    });
+
+    expect(result.errors).toContainEqual({
+      path: "derived",
+      message: 'Group extension target must be a group: "{base}"',
+    });
+  });
+
+  test("reports group extension cycles", () => {
+    const result = parseDesignTokens({
+      first: { $extends: "{second}" },
+      second: { $extends: "{first}" },
+    });
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "first",
+          message: expect.stringContaining("Circular group extension"),
+        }),
+        expect.objectContaining({
+          path: "second",
+          message: expect.stringContaining("Circular group extension"),
+        }),
+      ]),
+    );
+  });
 });
 
 describe("serializeDesignTokens", () => {
@@ -1325,6 +1390,36 @@ describe("serializeDesignTokens", () => {
     const parsed = parseDesignTokens(input);
     const serialized = serializeDesignTokens(nodesToMap(parsed.nodes));
     expect(serialized).toEqual(input);
+  });
+
+  test("serializes $extends using the target group's current path", () => {
+    const parsed = parseDesignTokens({
+      original: {
+        base: {
+          value: { $type: "number", $value: 1 },
+        },
+      },
+      destination: {},
+      derived: { $extends: "{original.base}" },
+    });
+    const target = parsed.nodes.find((node) => node.meta.name === "base");
+    const destination = parsed.nodes.find(
+      (node) => node.meta.name === "destination",
+    );
+    if (!target || !destination) throw new Error("Expected groups to parse");
+
+    target.meta.name = "renamed";
+    target.parentId = destination.nodeId;
+
+    expect(serializeDesignTokens(nodesToMap(parsed.nodes))).toEqual({
+      original: {},
+      destination: {
+        renamed: {
+          value: { $type: "number", $value: 1 },
+        },
+      },
+      derived: { $extends: "{destination.renamed}" },
+    });
   });
 
   test("preserves deprecated flags", () => {

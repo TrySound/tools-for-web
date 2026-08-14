@@ -20,6 +20,7 @@ export type SetMeta = {
 export type GroupMeta = {
   nodeType: "token-group";
   name: string;
+  extends?: NodeRef;
   type?: Value["type"];
   description?: string;
   deprecated?: boolean | string;
@@ -344,6 +345,27 @@ export const isAliasCircular = (
   }
 
   return false; // No circular dependency
+};
+
+export const isGroupExtensionCircular = (
+  currentGroupId: string,
+  targetGroupId: string,
+  nodes: Map<string, TreeNode<TreeNodeMeta>>,
+): boolean => {
+  const visited = new Set<string>();
+  let currentId: string | undefined = targetGroupId;
+
+  while (currentId) {
+    if (currentId === currentGroupId) return true;
+    if (visited.has(currentId)) return false;
+    visited.add(currentId);
+
+    const node = nodes.get(currentId);
+    if (node?.meta.nodeType !== "token-group") return false;
+    currentId = node.meta.extends?.ref;
+  }
+
+  return false;
 };
 
 export type TreeNodeMeta =

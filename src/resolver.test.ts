@@ -1558,6 +1558,105 @@ describe("serializeTokenResolver", () => {
 });
 
 describe("cross-set aliases", () => {
+  test("preserves cross-set group extensions as group NodeRefs", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "Foundation",
+          sources: [
+            {
+              base: {
+                value: { $type: "number", $value: 1 },
+              },
+            },
+          ],
+        },
+        {
+          type: "set",
+          name: "Components",
+          sources: [{ derived: { $extends: "{base}" } }],
+        },
+      ],
+    });
+
+    expect(result.errors).toEqual([]);
+    const base = result.nodes.find((node) => node.meta.name === "base");
+    const derived = result.nodes.find((node) => node.meta.name === "derived");
+    expect(derived?.meta).toEqual(
+      expect.objectContaining({
+        nodeType: "token-group",
+        extends: { ref: base?.nodeId },
+      }),
+    );
+
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+    expect(serialized.resolutionOrder[1]).toEqual(
+      expect.objectContaining({
+        type: "set",
+        name: "Components",
+        sources: [{ derived: { $extends: "{base}" } }],
+      }),
+    );
+  });
+
+  test("rejects a cross-set token as a group extension target", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "Foundation",
+          sources: [{ base: { $type: "number", $value: 1 } }],
+        },
+        {
+          type: "set",
+          name: "Components",
+          sources: [{ derived: { $extends: "{base}" } }],
+        },
+      ],
+    });
+
+    expect(result.errors).toContainEqual({
+      path: "derived",
+      message: 'Group extension target must be a group: "{base}"',
+    });
+  });
+
+  test("reports group extension cycles across sets", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "First",
+          sources: [{ first: { $extends: "{second}" } }],
+        },
+        {
+          type: "set",
+          name: "Second",
+          sources: [{ second: { $extends: "{first}" } }],
+        },
+      ],
+    });
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "first",
+          message: expect.stringContaining("Circular group extension"),
+        }),
+        expect.objectContaining({
+          path: "second",
+          message: expect.stringContaining("Circular group extension"),
+        }),
+      ]),
+    );
+  });
+
   test("allows tokens to reference tokens from other sets", () => {
     const result = parseTokenResolver({
       version: "2025.10",
