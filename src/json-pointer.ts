@@ -16,14 +16,27 @@ const decodePointerSegment = (segment: string): string | undefined => {
   return segment.replaceAll("~1", "/").replaceAll("~0", "~");
 };
 
+const normalizeJsonPointer = (pointer: string): string | undefined => {
+  if (!pointer.startsWith("#")) {
+    return pointer;
+  }
+
+  try {
+    return decodeURIComponent(pointer.slice(1));
+  } catch {
+    return undefined;
+  }
+};
+
 export const resolveJsonPointer = (
   root: unknown,
   pointer: string,
 ): unknown | undefined => {
-  const normalizedPointer = pointer.startsWith("#")
-    ? pointer.slice(1)
-    : pointer;
+  const normalizedPointer = normalizeJsonPointer(pointer);
 
+  if (normalizedPointer === undefined) {
+    return undefined;
+  }
   if (normalizedPointer === "") {
     return root;
   }
@@ -106,6 +119,16 @@ export const materializeJsonReferences = (input: unknown): MaterializedJson => {
         });
         return cloneJson(value);
       }
+      if (
+        (reference !== "#" && !reference.startsWith("#/")) ||
+        normalizeJsonPointer(reference) === undefined
+      ) {
+        errors.push({
+          path: errorPath,
+          message: `Unsupported or malformed JSON reference: "${reference}"`,
+        });
+        return cloneJson(value);
+      }
       if (referenceStack.includes(reference)) {
         errors.push({
           path: errorPath,
@@ -132,29 +155,42 @@ export const materializeJsonReferences = (input: unknown): MaterializedJson => {
         return cloneJson(value);
       }
 
+      const siblingEntries = Object.entries(object).filter(
+        ([key]) => key !== "$ref",
+      );
+      if (
+        siblingEntries.length > 0 &&
+        (materializedTarget === null ||
+          typeof materializedTarget !== "object" ||
+          Array.isArray(materializedTarget))
+      ) {
+        errors.push({
+          path: errorPath,
+          message: `JSON reference target must be an object when siblings are present: "${reference}"`,
+        });
+        return cloneJson(value);
+      }
+      if (siblingEntries.length === 0) {
+        return materializedTarget;
+      }
+
       const siblings = Object.fromEntries(
-        Object.entries(object)
-          .filter(([key]) => key !== "$ref")
-          .map(([key, child]) => [
-            key,
-            key === "$extensions"
-              ? cloneJson(child)
-              : materialize(
-                  child,
-                  `${path}/${encodePointerSegment(key)}`,
-                  referenceStack,
-                ),
-          ]),
+        siblingEntries.map(([key, child]) => [
+          key,
+          key === "$extensions"
+            ? cloneJson(child)
+            : materialize(
+                child,
+                `${path}/${encodePointerSegment(key)}`,
+                referenceStack,
+              ),
+        ]),
       );
 
-      if (
-        materializedTarget !== null &&
-        typeof materializedTarget === "object" &&
-        !Array.isArray(materializedTarget)
-      ) {
-        return { ...materializedTarget, ...siblings };
-      }
-      return Object.keys(siblings).length === 0 ? materializedTarget : siblings;
+      return {
+        ...(materializedTarget as Record<string, unknown>),
+        ...siblings,
+      };
     }
 
     return Object.fromEntries(

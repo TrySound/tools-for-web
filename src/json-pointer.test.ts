@@ -15,6 +15,22 @@ describe("resolveJsonPointer", () => {
     expect(resolveJsonPointer(input, "/groups/1/name")).toBe("second");
     expect(resolveJsonPointer(input, "")).toBe(input);
   });
+
+  test("returns complete object and array targets", () => {
+    const input = {
+      object: { name: "complete", nested: { value: 12 } },
+      array: ["first", { name: "second" }],
+    };
+
+    expect(resolveJsonPointer(input, "#/object")).toBe(input.object);
+    expect(resolveJsonPointer(input, "#/array")).toBe(input.array);
+  });
+
+  test("percent-decodes URI fragment segments before pointer escapes", () => {
+    const input = { "a b": { "c/d": 42 } };
+
+    expect(resolveJsonPointer(input, "#/a%20b/c~1d")).toBe(42);
+  });
 });
 
 describe("materializeJsonReferences", () => {
@@ -92,6 +108,73 @@ describe("materializeJsonReferences", () => {
           path: "/result/$ref",
           message:
             'External JSON reference is not supported: "tokens.json#/definitions/base"',
+        },
+      ],
+    });
+  });
+
+  test.each(["#anchor", "##/definitions/base"])(
+    "reports unsupported or malformed local reference %s",
+    (reference) => {
+      const input = { result: { $ref: reference } };
+
+      expect(materializeJsonReferences(input)).toEqual({
+        value: input,
+        errors: [
+          {
+            path: "/result/$ref",
+            message: `Unsupported or malformed JSON reference: "${reference}"`,
+          },
+        ],
+      });
+    },
+  );
+
+  test("reports malformed URI fragment percent encoding", () => {
+    const input = { result: { $ref: "#/bad%2" } };
+
+    expect(materializeJsonReferences(input)).toEqual({
+      value: input,
+      errors: [
+        {
+          path: "/result/$ref",
+          message: 'Unsupported or malformed JSON reference: "#/bad%2"',
+        },
+      ],
+    });
+  });
+
+  test("materializes a complete array target without siblings", () => {
+    const input = {
+      definitions: { values: ["first", { nested: true }] },
+      result: { $ref: "#/definitions/values" },
+    };
+
+    expect(materializeJsonReferences(input)).toEqual({
+      value: {
+        definitions: { values: ["first", { nested: true }] },
+        result: ["first", { nested: true }],
+      },
+      errors: [],
+    });
+  });
+
+  test.each([
+    ["array", ["first", "second"]],
+    ["primitive", 42],
+  ])("reports siblings on a %s reference target", (targetName, target) => {
+    const input = {
+      definitions: { target },
+      result: { $ref: "#/definitions/target", description: "invalid" },
+    };
+
+    expect(materializeJsonReferences(input)).toEqual({
+      value: input,
+      errors: [
+        {
+          path: "/result/$ref",
+          message:
+            'JSON reference target must be an object when siblings are present: "#/definitions/target"',
         },
       ],
     });
