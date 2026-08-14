@@ -959,6 +959,98 @@ describe("parseTokenResolver", () => {
   });
 
   test.each([
+    {
+      name: "a top-level self-reference at a nonzero index",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          { $ref: "#/resolutionOrder/1" },
+        ],
+      },
+      path: "/resolutionOrder/1/$ref",
+      reference: "#/resolutionOrder/1",
+    },
+    {
+      name: "a top-level non-self reference",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          { $ref: "#/resolutionOrder/0" },
+        ],
+      },
+      path: "/resolutionOrder/1/$ref",
+      reference: "#/resolutionOrder/0",
+    },
+    {
+      name: "a nested set source self-reference",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          {
+            type: "set",
+            name: "Second",
+            sources: [{ $ref: "#/resolutionOrder/1" }],
+          },
+        ],
+      },
+      path: "/resolutionOrder/1/sources/0/$ref",
+      reference: "#/resolutionOrder/1",
+    },
+    {
+      name: "a nested modifier context self-reference",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: {
+              dark: [{ $ref: "#/resolutionOrder/1" }],
+            },
+          },
+        ],
+      },
+      path: "/resolutionOrder/1/contexts/dark/0/$ref",
+      reference: "#/resolutionOrder/1",
+    },
+    {
+      name: "a nested modifier context non-self reference",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          { type: "set", name: "Second", sources: [] },
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: {
+              dark: [{ $ref: "#/resolutionOrder/0" }],
+            },
+          },
+        ],
+      },
+      path: "/resolutionOrder/2/contexts/dark/0/$ref",
+      reference: "#/resolutionOrder/0",
+    },
+  ])(
+    "reports one prohibited-target error for $name",
+    ({ document, path, reference }) => {
+      const result = parseTokenResolver(document);
+
+      expect(result.errors).toEqual([
+        {
+          path,
+          message: `References into resolutionOrder are not allowed: "${reference}"`,
+        },
+      ]);
+    },
+  );
+
+  test.each([
     ["a $defs object", "#/$defs/source", "must target a root set"],
     ["an external document", "tokens.json", "External JSON reference"],
     ["a missing definition", "#/sets/missing", "target not found"],

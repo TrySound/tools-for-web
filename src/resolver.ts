@@ -128,12 +128,25 @@ const validateResolverReferences = (input: unknown): JsonReferenceError[] => {
 const normalizeResolverDocument = (
   input: unknown,
 ): { value: unknown; errors: JsonReferenceError[] } => {
-  const errors = validateResolverReferences(input);
+  const errorsByPath = new Map<string, JsonReferenceError>();
+  const addErrors = (errors: JsonReferenceError[]): void => {
+    for (const error of errors) {
+      if (!errorsByPath.has(error.path)) errorsByPath.set(error.path, error);
+    }
+  };
+  const result = (value: unknown) => ({
+    value,
+    errors: Array.from(errorsByPath.values()),
+  });
+
+  addErrors(validateResolverReferences(input));
+  if (errorsByPath.size > 0) return result(input);
+
   const materialized = materializeJsonReferences(input);
-  errors.push(...materialized.errors);
+  addErrors(materialized.errors);
 
   if (!isRecord(input) || !isRecord(materialized.value)) {
-    return { value: materialized.value, errors };
+    return result(materialized.value);
   }
   const materializedRoot = materialized.value;
 
@@ -223,7 +236,7 @@ const normalizeResolverDocument = (
   const rawOrder = input.resolutionOrder;
   const materializedOrder = materializedRoot.resolutionOrder;
   if (!Array.isArray(rawOrder) || !Array.isArray(materializedOrder)) {
-    return { value: materializedRoot, errors };
+    return result(materializedRoot);
   }
 
   const resolutionOrder = rawOrder.map((rawItem, index) => {
@@ -235,12 +248,12 @@ const normalizeResolverDocument = (
 
     if (reference && !definition) {
       const errorPath = `/resolutionOrder/${index}/$ref`;
-      if (!errors.some((error) => error.path === errorPath)) {
-        errors.push({
+      addErrors([
+        {
           path: errorPath,
           message: `resolutionOrder references must target a root set or modifier: "${reference}"`,
-        });
-      }
+        },
+      ]);
       return materializedItem;
     }
 
@@ -269,23 +282,22 @@ const normalizeResolverDocument = (
   resolutionOrder.forEach((item, index) => {
     if (!isRecord(item) || typeof item.name !== "string") return;
     if (resolutionOrderNames.has(item.name)) {
-      errors.push({
-        path: `/resolutionOrder/${index}/name`,
-        message: `Duplicate resolutionOrder name: "${item.name}"`,
-      });
+      addErrors([
+        {
+          path: `/resolutionOrder/${index}/name`,
+          message: `Duplicate resolutionOrder name: "${item.name}"`,
+        },
+      ]);
     }
     resolutionOrderNames.add(item.name);
   });
 
-  return {
-    value: {
-      ...materializedRoot,
-      sets: normalizeDefinitions("set"),
-      modifiers: normalizeDefinitions("modifier"),
-      resolutionOrder,
-    },
-    errors,
-  };
+  return result({
+    ...materializedRoot,
+    sets: normalizeDefinitions("set"),
+    modifiers: normalizeDefinitions("modifier"),
+    resolutionOrder,
+  });
 };
 
 // Helper function to deep merge sources respecting path-based order
