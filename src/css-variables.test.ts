@@ -1,5 +1,10 @@
 import { test, expect, describe } from "vitest";
-import { generateCssVariables, parseCssVariables } from "./css-variables";
+import {
+  effectiveNodeToVariable,
+  generateCssVariables,
+  parseCssVariables,
+} from "./css-variables";
+import { createEffectiveTree } from "./effective-tree";
 import { parseDesignTokens } from "./tokens";
 import { parseTokenResolver } from "./resolver";
 import type { TreeNode } from "./store";
@@ -15,6 +20,23 @@ const nodesToMap = (nodes: TreeNode<TreeNodeMeta>[]) => {
 };
 
 describe("generateCssVariables", () => {
+  test("formats copied variables from an effective occurrence path", () => {
+    const parsed = parseDesignTokens({
+      base: { alias: { $type: "number", $value: 1 } },
+      derived: { $extends: "{base}" },
+    });
+    const derived = createEffectiveTree(nodesToMap(parsed.nodes)).find(
+      (item) => item.node.meta.name === "derived",
+    );
+    const alias = derived?.children.find(
+      (item) => item.node.meta.name === "alias",
+    );
+
+    expect(alias && effectiveNodeToVariable(alias)).toBe(
+      "var(--derived-alias)",
+    );
+  });
+
   test("generates empty CSS for empty nodes", () => {
     const result = generateCssVariables(new Map());
     expect(result).toBe(":root {\n}");

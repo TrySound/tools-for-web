@@ -5,9 +5,8 @@
     createEffectiveTree,
     type EffectiveTreeNode,
   } from "./effective-tree";
-  import type { TokenMeta, TreeNodeMeta } from "./state.svelte";
+  import type { TokenMeta } from "./state.svelte";
   import { treeState, resolveTokenValue } from "./state.svelte";
-  import type { TreeNode } from "./store";
   import { serializeColor } from "./color";
   import type {
     CubicBezierValue,
@@ -15,7 +14,7 @@
     StrokeStyleValue,
   } from "./schema";
   import {
-    referenceToVariable,
+    effectiveNodeToVariable,
     toCubicBezierValue,
     toDimensionValue,
     toDurationValue,
@@ -263,29 +262,27 @@
   {/if}
 {/snippet}
 
-{#snippet copyButton(node: TreeNode<TreeNodeMeta>)}
-  {@const cssVariable = referenceToVariable(
-    { ref: node.nodeId },
-    treeState.nodes(),
-  )}
+{#snippet copyButton(effectiveNode: EffectiveTreeNode)}
+  {@const cssVariable = effectiveNodeToVariable(effectiveNode)}
   <div class="copy-css-button">
     <CopyButton label="Copy CSS Variable" data={cssVariable} />
   </div>
 {/snippet}
 
 {#snippet tokenCard(
-  node: TreeNode<TreeNodeMeta>,
+  effectiveNode: EffectiveTreeNode,
   tokenMeta: TokenMeta,
   index: number,
   siblings: EffectiveTreeNode[],
 )}
+  {@const node = effectiveNode.node}
   {@const tokenValue = resolveTokenValue(node, treeState.nodes())}
   <div class="token-card" data-deprecated={Boolean(tokenMeta.deprecated)}>
     {#if tokenValue.type === "color"}
       {@const color = serializeColor(tokenValue.value)}
       <div class="token-preview">
         <div class="color-preview" style="background: {color};"></div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -299,7 +296,7 @@
         <div class="dimension-preview" style:--value={value}>
           <div class="dimension-bar"></div>
         </div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -314,7 +311,7 @@
           cubicBezier: [0, 0, 1, 1],
           duration: tokenValue.value,
         })}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -330,7 +327,7 @@
           id: `styleguide-cubic-bezier-${index}`,
           cubicBezier: tokenValue.value,
         })}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -353,7 +350,7 @@
           tokens: groupTokens,
           value: tokenValue.value,
         })}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -367,7 +364,7 @@
         <div class="typography-preview" style="font-family: {fontFamily};">
           {typographyPlaceholder}
         </div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -381,7 +378,7 @@
         <div class="typography-preview" style="font-weight: {weight};">
           {typographyPlaceholder}
         </div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -398,7 +395,7 @@
           delay: transition.delay,
           cubicBezier: transition.timingFunction,
         })}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -424,7 +421,7 @@
         >
           {typographyPlaceholder}
         </div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -445,7 +442,7 @@
           class="gradient-preview"
           style="background-image: {gradient};"
         ></div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -466,7 +463,7 @@
           class="shadow-preview"
           style="box-shadow: {toShadowValue(tokenValue.value, new Map())};"
         ></div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -490,7 +487,7 @@
           class="border-preview"
           style="border: {width} {style} {color};"
         ></div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -505,7 +502,7 @@
     {#if tokenValue.type === "strokeStyle"}
       <div class="token-preview">
         {@render strokeStylePreview(tokenValue.value)}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -535,7 +532,7 @@
     <div class="token-grid">
       {#each tokens as item, index (item.node.nodeId)}
         {#if item.node.meta.nodeType === "token"}
-          {@render tokenCard(item.node, item.node.meta, index, children)}
+          {@render tokenCard(item, item.node.meta, index, children)}
         {/if}
       {/each}
     </div>

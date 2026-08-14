@@ -66,6 +66,9 @@ export const referenceToVariable = (
   return `var(--${kebabCase(noCase(path.join("-")))})`;
 };
 
+export const effectiveNodeToVariable = (node: EffectiveTreeNode): string =>
+  `var(--${kebabCase(noCase(node.path.join("-")))})`;
+
 /**
  * Convert a value or reference to a string or nested var()
  */

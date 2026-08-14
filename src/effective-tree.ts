@@ -3,7 +3,13 @@ import type { TreeNodeMeta } from "./state.svelte";
 
 export type EffectiveTreeNode = {
   node: TreeNode<TreeNodeMeta>;
+  path: string[];
   children: EffectiveTreeNode[];
+};
+
+type ResolvedTreeNode = {
+  node: TreeNode<TreeNodeMeta>;
+  children: ResolvedTreeNode[];
 };
 
 export const createEffectiveTree = (
@@ -22,12 +28,47 @@ export const createEffectiveTree = (
     children.sort(compareTreeNodes);
   }
 
-  const resolvedGroups = new Map<string, EffectiveTreeNode>();
+  const getAuthoredPath = (node: TreeNode<TreeNodeMeta>): string => {
+    const path = [node.meta.name];
+    let parentId = node.parentId;
+    while (parentId) {
+      const parent = nodes.get(parentId);
+      if (!parent) break;
+      path.unshift(parent.meta.name);
+      parentId = parent.parentId;
+    }
+    return path.join(".");
+  };
+
+  for (const [parentId, children] of childrenByParent) {
+    const names = new Set<string>();
+    for (const child of children) {
+      if (names.has(child.meta.name)) {
+        if (!parentId) {
+          throw new Error(
+            `Duplicate sibling name "${child.meta.name}" at root`,
+          );
+        }
+        const parent = nodes.get(parentId);
+        const parentType =
+          parent?.meta.nodeType === "token-group"
+            ? "group"
+            : (parent?.meta.nodeType ?? "node");
+        const parentPath = parent ? getAuthoredPath(parent) : parentId;
+        throw new Error(
+          `Duplicate sibling name "${child.meta.name}" under ${parentType} "${parentPath}"`,
+        );
+      }
+      names.add(child.meta.name);
+    }
+  }
+
+  const resolvedGroups = new Map<string, ResolvedTreeNode>();
 
   const mergeChildren = (
-    inherited: EffectiveTreeNode[],
-    local: EffectiveTreeNode[],
-  ): EffectiveTreeNode[] => {
+    inherited: ResolvedTreeNode[],
+    local: ResolvedTreeNode[],
+  ): ResolvedTreeNode[] => {
     const merged = [...inherited];
     for (const localChild of local) {
       const inheritedIndex = merged.findIndex(
@@ -57,7 +98,7 @@ export const createEffectiveTree = (
   const buildNode = (
     node: TreeNode<TreeNodeMeta>,
     extensionStack: TreeNode<TreeNodeMeta>[] = [],
-  ): EffectiveTreeNode => {
+  ): ResolvedTreeNode => {
     if (node.meta.nodeType !== "token-group") {
       return {
         node,
@@ -81,7 +122,7 @@ export const createEffectiveTree = (
     }
 
     const nextStack = [...extensionStack, node];
-    let inheritedChildren: EffectiveTreeNode[] = [];
+    let inheritedChildren: ResolvedTreeNode[] = [];
     if (node.meta.extends) {
       const target = nodes.get(node.meta.extends.ref);
       if (!target) {
@@ -114,5 +155,25 @@ export const createEffectiveTree = (
     }
   }
 
-  return (childrenByParent.get(undefined) ?? []).map((node) => buildNode(node));
+  const addOccurrencePaths = (
+    resolvedNode: ResolvedTreeNode,
+    parentPath: string[],
+  ): EffectiveTreeNode => {
+    const { node } = resolvedNode;
+    const path =
+      node.meta.nodeType === "token-group" || node.meta.nodeType === "token"
+        ? [...parentPath, node.meta.name]
+        : parentPath;
+    return {
+      node,
+      path,
+      children: resolvedNode.children.map((child) =>
+        addOccurrencePaths(child, path),
+      ),
+    };
+  };
+
+  return (childrenByParent.get(undefined) ?? []).map((node) =>
+    addOccurrencePaths(buildNode(node), []),
+  );
 };
