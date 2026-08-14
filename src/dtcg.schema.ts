@@ -267,15 +267,17 @@ export const resolverSourceSchema = z.record(
 
 export type ResolverSource = z.infer<typeof resolverSourceSchema>;
 
-export const resolverReferenceSchema = z.object({
+export const resolverReferenceSchema = z.looseObject({
   $ref: z.string(),
 });
 
 export type ResolverReference = z.infer<typeof resolverReferenceSchema>;
 
 export const rawResolverSourceSchema = z.union([
-  resolverSourceSchema,
   resolverReferenceSchema,
+  resolverSourceSchema.check(
+    z.refine((source) => !("$ref" in source), "A source $ref must be a string"),
+  ),
 ]);
 
 export type RawResolverSource = z.infer<typeof rawResolverSourceSchema>;
@@ -288,6 +290,16 @@ export const resolverSetDefinitionSchema = z.object({
 
 export type ResolverSetDefinition = z.infer<typeof resolverSetDefinitionSchema>;
 
+export const rawResolverSetDefinitionSchema = z.object({
+  sources: z.array(rawResolverSourceSchema),
+  description: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type RawResolverSetDefinition = z.infer<
+  typeof rawResolverSetDefinitionSchema
+>;
+
 // Set in resolutionOrder array - collection of design tokens
 export const resolverSetSchema = z.object({
   type: z.literal("set"),
@@ -299,10 +311,25 @@ export const resolverSetSchema = z.object({
 
 export type ResolverSet = z.infer<typeof resolverSetSchema>;
 
+export const rawResolverSetSchema = z.object({
+  type: z.literal("set"),
+  name: nameSchema,
+  sources: z.array(rawResolverSourceSchema),
+  description: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type RawResolverSet = z.infer<typeof rawResolverSetSchema>;
+
 // Modifier contexts - map of context name to sources
 export const resolverModifierContextsSchema = z.record(
   z.string(), // context name (e.g., "light", "dark")
   z.array(resolverSourceSchema), // sources array (non-optional)
+);
+
+export const rawResolverModifierContextsSchema = z.record(
+  z.string(),
+  z.array(rawResolverSourceSchema),
 );
 
 export const resolverModifierDefinitionSchema = z.object({
@@ -314,6 +341,17 @@ export const resolverModifierDefinitionSchema = z.object({
 
 export type ResolverModifierDefinition = z.infer<
   typeof resolverModifierDefinitionSchema
+>;
+
+export const rawResolverModifierDefinitionSchema = z.object({
+  contexts: rawResolverModifierContextsSchema,
+  description: z.optional(z.string()),
+  default: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type RawResolverModifierDefinition = z.infer<
+  typeof rawResolverModifierDefinitionSchema
 >;
 
 // Modifier in resolutionOrder - for documentation, parsed but skipped
@@ -328,6 +366,17 @@ export const resolverModifierSchema = z.object({
 
 export type ResolverModifier = z.infer<typeof resolverModifierSchema>;
 
+export const rawResolverModifierSchema = z.object({
+  type: z.literal("modifier"),
+  name: nameSchema,
+  contexts: rawResolverModifierContextsSchema,
+  description: z.optional(z.string()),
+  default: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type RawResolverModifier = z.infer<typeof rawResolverModifierSchema>;
+
 // Item in resolutionOrder array
 export const resolutionOrderItemSchema = z.union([
   resolverSetSchema,
@@ -335,6 +384,16 @@ export const resolutionOrderItemSchema = z.union([
 ]);
 
 export type ResolutionOrderItem = z.infer<typeof resolutionOrderItemSchema>;
+
+export const rawResolutionOrderItemSchema = z.union([
+  resolverReferenceSchema,
+  rawResolverSetSchema,
+  rawResolverModifierSchema,
+]);
+
+export type RawResolutionOrderItem = z.infer<
+  typeof rawResolutionOrderItemSchema
+>;
 
 // Resolver document following Design Tokens Resolver Module 2025.10
 export const resolverDocumentSchema = z.object({
@@ -349,3 +408,18 @@ export const resolverDocumentSchema = z.object({
 });
 
 export type ResolverDocument = z.infer<typeof resolverDocumentSchema>;
+
+export const rawResolverDocumentSchema = z.object({
+  version: z.literal("2025.10"),
+  name: z.optional(z.string()),
+  description: z.optional(z.string()),
+  $schema: z.optional(z.string()),
+  $defs: z.optional(z.record(z.string(), z.unknown())),
+  sets: z.optional(z.record(z.string(), rawResolverSetDefinitionSchema)),
+  modifiers: z.optional(
+    z.record(z.string(), rawResolverModifierDefinitionSchema),
+  ),
+  resolutionOrder: z.array(rawResolutionOrderItemSchema),
+});
+
+export type RawResolverDocument = z.infer<typeof rawResolverDocumentSchema>;

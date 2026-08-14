@@ -1,5 +1,9 @@
 import { test, expect, describe } from "vitest";
 import {
+  rawResolverDocumentSchema,
+  type RawResolverDocument,
+} from "./dtcg.schema";
+import {
   parseTokenResolver,
   serializeTokenResolver,
   isResolverFormat,
@@ -52,6 +56,52 @@ describe("isResolverFormat", () => {
         resolutionOrder: "not an array",
       }),
     ).toBe(false);
+  });
+});
+
+describe("rawResolverDocumentSchema", () => {
+  test("accepts references and inline sources throughout raw resolver input", () => {
+    const document: RawResolverDocument = {
+      version: "2025.10",
+      sets: {
+        base: {
+          sources: [
+            { $ref: "#/$defs/base", description: "reference override" },
+            {},
+          ],
+        },
+      },
+      modifiers: {
+        theme: {
+          contexts: {
+            dark: [{ $ref: "#/sets/base" }, {}],
+          },
+        },
+      },
+      resolutionOrder: [
+        { $ref: "#/sets/base" },
+        {
+          type: "set",
+          name: "InlineSet",
+          sources: [{ $ref: "#/$defs/base" }, {}],
+        },
+        {
+          type: "modifier",
+          name: "InlineModifier",
+          contexts: { dark: [{ $ref: "#/sets/base" }, {}] },
+        },
+      ],
+      $defs: { base: {} },
+    };
+
+    const result = rawResolverDocumentSchema.safeParse(document);
+
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("Expected raw resolver to validate");
+    expect(result.data.sets?.base.sources[0]).toEqual({
+      $ref: "#/$defs/base",
+      description: "reference override",
+    });
   });
 });
 
@@ -715,6 +765,46 @@ describe("parseTokenResolver", () => {
     expect(serialized).not.toHaveProperty("modifiers");
   });
 
+  test.each([
+    {
+      collision: "set/set",
+      resolutionOrder: [
+        { type: "set", name: "Duplicate", sources: [] },
+        { type: "set", name: "Duplicate", sources: [] },
+      ],
+    },
+    {
+      collision: "modifier/modifier",
+      resolutionOrder: [
+        { type: "modifier", name: "Duplicate", contexts: { one: [] } },
+        { type: "modifier", name: "Duplicate", contexts: { two: [] } },
+      ],
+    },
+    {
+      collision: "set/modifier",
+      resolutionOrder: [
+        { type: "set", name: "Duplicate", sources: [] },
+        { type: "modifier", name: "Duplicate", contexts: { one: [] } },
+      ],
+    },
+  ])(
+    "rejects a $collision name collision before creating editor nodes",
+    ({ resolutionOrder }) => {
+      const result = parseTokenResolver({
+        version: "2025.10",
+        resolutionOrder,
+      });
+
+      expect(result.errors).toEqual([
+        {
+          path: "/resolutionOrder/1/name",
+          message: 'Duplicate resolutionOrder name: "Duplicate"',
+        },
+      ]);
+      expect(result.nodes).toHaveLength(0);
+    },
+  );
+
   test("materializes $defs sources and merges source arrays in order", () => {
     const result = parseTokenResolver({
       version: "2025.10",
@@ -869,20 +959,22 @@ describe("parseTokenResolver", () => {
   });
 
   test.each([
-    ["a $defs object", "#/$defs/source"],
-    ["an external document", "tokens.json"],
-    ["a missing definition", "#/sets/missing"],
-  ])("rejects a resolutionOrder reference to %s", (_name, $ref) => {
+    ["a $defs object", "#/$defs/source", "must target a root set"],
+    ["an external document", "tokens.json", "External JSON reference"],
+    ["a missing definition", "#/sets/missing", "target not found"],
+    ["a malformed pointer", "#invalid", "malformed JSON reference"],
+  ])("rejects a resolutionOrder reference to %s", (_name, $ref, message) => {
     const result = parseTokenResolver({
       version: "2025.10",
       $defs: { source: {} },
       resolutionOrder: [{ $ref }],
     });
 
-    expect(result.errors.length).toBeGreaterThan(0);
-    expect(result.errors.some((error) => error.path.includes("/0/$ref"))).toBe(
-      true,
-    );
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toEqual({
+      path: "/resolutionOrder/0/$ref",
+      message: expect.stringContaining(message),
+    });
   });
 });
 

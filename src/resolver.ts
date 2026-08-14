@@ -1,6 +1,7 @@
 import * as z from "zod/mini";
 import { generateKeyBetween } from "fractional-indexing";
 import {
+  rawResolverDocumentSchema,
   resolverDocumentSchema,
   type ResolverDocument,
   type ResolverSet,
@@ -233,10 +234,13 @@ const normalizeResolverDocument = (
       : undefined;
 
     if (reference && !definition) {
-      errors.push({
-        path: `/resolutionOrder/${index}/$ref`,
-        message: `resolutionOrder references must target a root set or modifier: "${reference}"`,
-      });
+      const errorPath = `/resolutionOrder/${index}/$ref`;
+      if (!errors.some((error) => error.path === errorPath)) {
+        errors.push({
+          path: errorPath,
+          message: `resolutionOrder references must target a root set or modifier: "${reference}"`,
+        });
+      }
       return materializedItem;
     }
 
@@ -259,6 +263,18 @@ const normalizeResolverDocument = (
       type === "modifier" ? "modifier" : "set",
     );
     return isRecord(normalized) ? { ...normalized, type, name } : normalized;
+  });
+
+  const resolutionOrderNames = new Set<string>();
+  resolutionOrder.forEach((item, index) => {
+    if (!isRecord(item) || typeof item.name !== "string") return;
+    if (resolutionOrderNames.has(item.name)) {
+      errors.push({
+        path: `/resolutionOrder/${index}/name`,
+        message: `Duplicate resolutionOrder name: "${item.name}"`,
+      });
+    }
+    resolutionOrderNames.add(item.name);
   });
 
   return {
@@ -331,6 +347,16 @@ export const isResolverFormat = (obj: unknown): boolean => {
 // Phase 1: Extract intermediary nodes from all sets (collect what tokens/groups exist)
 // Phase 2: Resolve with all accumulated nodes available (enables cross-set references)
 export const parseTokenResolver = (input: unknown): ParseResult => {
+  const rawValidation = rawResolverDocumentSchema.safeParse(input);
+  if (!rawValidation.success) {
+    return {
+      nodes: [],
+      errors: [
+        { path: "resolver", message: z.prettifyError(rawValidation.error) },
+      ],
+    };
+  }
+
   const normalized = normalizeResolverDocument(input);
   if (normalized.errors.length > 0) {
     return { nodes: [], errors: normalized.errors };
