@@ -730,6 +730,53 @@ describe("parseTokenResolver", () => {
     },
   );
 
+  test.each(["toString", "constructor"])(
+    "rejects inherited context key %s as a modifier default",
+    (defaultContext) => {
+      const result = parseTokenResolver({
+        version: "2025.10",
+        resolutionOrder: [
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: { light: [] },
+            default: defaultContext,
+          },
+        ],
+      });
+
+      expect(result.nodes).toEqual([]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].message).toContain("resolutionOrder[0].default");
+    },
+  );
+
+  test.each(["toString", "constructor"])(
+    "accepts own context key %s as a modifier default",
+    (defaultContext) => {
+      const result = parseTokenResolver({
+        version: "2025.10",
+        resolutionOrder: [
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: { [defaultContext]: [] },
+            default: defaultContext,
+          },
+        ],
+      });
+
+      expect(result.errors).toEqual([]);
+      expect(
+        result.nodes.some(
+          (node) =>
+            node.meta.nodeType === "token-context" &&
+            node.meta.name === defaultContext,
+        ),
+      ).toBe(true);
+    },
+  );
+
   test("accepts modifier with optional default", () => {
     const result = parseTokenResolver({
       version: "2025.10",

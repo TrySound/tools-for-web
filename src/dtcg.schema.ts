@@ -421,7 +421,7 @@ const resolverModifierSemantics = z.check<ResolverDocumentModifierShape>(
       }
       if (
         modifier.default !== undefined &&
-        !(modifier.default in modifier.contexts)
+        !Object.hasOwn(modifier.contexts, modifier.default)
       ) {
         context.issues.push({
           code: "custom",
