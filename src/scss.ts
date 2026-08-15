@@ -1,6 +1,13 @@
 import { kebabCase, noCase } from "change-case";
-import { compareTreeNodes, type TreeNode } from "./store";
-import type { TreeNodeMeta } from "./state.svelte";
+import { serializeColor } from "./color";
+import {
+  toCubicBezierValue,
+  toDimensionValue,
+  toDurationValue,
+  toFontFamilyValue,
+  toStrokeStyleValue,
+} from "./css-variables";
+import { createEffectiveTree, type EffectiveTreeNode } from "./effective-tree";
 import {
   isNodeRef,
   type NodeRef,
@@ -11,14 +18,8 @@ import {
   type RawTypographyValue,
   type StrokeStyleValue,
 } from "./schema";
-import {
-  toCubicBezierValue,
-  toDimensionValue,
-  toDurationValue,
-  toFontFamilyValue,
-  toStrokeStyleValue,
-} from "./css-variables";
-import { serializeColor } from "./color";
+import type { TreeNode } from "./store";
+import type { TreeNodeMeta } from "./state.svelte";
 
 const referenceToVariable = (
   nodeRef: NodeRef,
@@ -156,12 +157,12 @@ const addTypography = (
 };
 
 const processNode = (
-  node: TreeNode<TreeNodeMeta>,
+  effectiveNode: EffectiveTreeNode,
   path: string[],
-  childrenByParent: Map<string | undefined, TreeNode<TreeNodeMeta>[]>,
   lines: string[],
   nodes: Map<string, TreeNode<TreeNodeMeta>>,
 ) => {
+  const { children, node } = effectiveNode;
   // token-modifier and token-context nodes and their entire subtrees should be skipped
   if (
     node.meta.nodeType === "token-modifier" ||
@@ -173,24 +174,16 @@ const processNode = (
   // token-set is intended for grouping globals
   // and should be omitted in generated variables, but its children are processed
   if (node.meta.nodeType === "token-set") {
-    const children = childrenByParent.get(node.nodeId) ?? [];
     for (const child of children) {
-      processNode(child, path, childrenByParent, lines, nodes);
+      processNode(child, path, lines, nodes);
     }
     return;
   }
 
   // group is only added to variable name
   if (node.meta.nodeType === "token-group") {
-    const children = childrenByParent.get(node.nodeId) ?? [];
     for (const child of children) {
-      processNode(
-        child,
-        [...path, node.meta.name],
-        childrenByParent,
-        lines,
-        nodes,
-      );
+      processNode(child, [...path, node.meta.name], lines, nodes);
     }
   }
 
@@ -254,23 +247,9 @@ export const generateScssVariables = (
   nodes: Map<string, TreeNode<TreeNodeMeta>>,
 ): string => {
   const lines: string[] = [];
-  const childrenByParent = new Map<
-    string | undefined,
-    TreeNode<TreeNodeMeta>[]
-  >();
-  // build index for children
-  for (const node of nodes.values()) {
-    const children = childrenByParent.get(node.parentId) ?? [];
-    children.push(node);
-    childrenByParent.set(node.parentId, children);
-  }
-  for (const children of childrenByParent.values()) {
-    children.sort(compareTreeNodes);
-  }
   // render scss variables
-  const rootChildren = childrenByParent.get(undefined) ?? [];
-  for (const node of rootChildren) {
-    processNode(node, [], childrenByParent, lines, nodes);
+  for (const node of createEffectiveTree(nodes)) {
+    processNode(node, [], lines, nodes);
   }
   return lines.join("\n");
 };

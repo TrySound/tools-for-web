@@ -1,9 +1,12 @@
 <script lang="ts">
   import { noCase, snakeCase } from "change-case";
   import { titleCase } from "title-case";
-  import type { TokenMeta, TreeNodeMeta } from "./state.svelte";
+  import {
+    createEffectiveTree,
+    type EffectiveTreeNode,
+  } from "./effective-tree";
+  import type { TokenMeta } from "./state.svelte";
   import { treeState, resolveTokenValue } from "./state.svelte";
-  import type { TreeNode } from "./store";
   import { serializeColor } from "./color";
   import type {
     CubicBezierValue,
@@ -11,7 +14,7 @@
     StrokeStyleValue,
   } from "./schema";
   import {
-    referenceToVariable,
+    effectiveNodeToVariable,
     toCubicBezierValue,
     toDimensionValue,
     toDurationValue,
@@ -24,23 +27,39 @@
 
   const { selectedItems }: { selectedItems: Set<string> } = $props();
 
+  const effectiveTree = $derived(createEffectiveTree(treeState.nodes()));
+
   const visibleNodes = $derived.by(() => {
     const visibleNodes = new Set<string>();
-    const addDescendants = (nodeId: string) => {
-      const children = treeState.getChildren(nodeId);
-      for (const child of children) {
-        visibleNodes.add(child.nodeId);
-        addDescendants(child.nodeId);
+    const addDescendants = (node: EffectiveTreeNode) => {
+      for (const child of node.children) {
+        visibleNodes.add(child.node.nodeId);
+        addDescendants(child);
       }
     };
-    for (const nodeId of selectedItems) {
-      let currentNodeId: undefined | string = nodeId;
-      while (currentNodeId) {
-        visibleNodes.add(currentNodeId);
-        const node = treeState.getNode(currentNodeId);
-        currentNodeId = node?.parentId;
+
+    const visit = (
+      node: EffectiveTreeNode,
+      ancestors: EffectiveTreeNode[],
+      effectiveParentId?: string,
+    ) => {
+      const authoredNode = treeState.getNode(node.node.nodeId);
+      if (
+        selectedItems.has(node.node.nodeId) &&
+        authoredNode?.parentId === effectiveParentId
+      ) {
+        for (const ancestor of ancestors) {
+          visibleNodes.add(ancestor.node.nodeId);
+        }
+        visibleNodes.add(node.node.nodeId);
+        addDescendants(node);
       }
-      addDescendants(nodeId);
+      for (const child of node.children) {
+        visit(child, [...ancestors, node], node.node.nodeId);
+      }
+    };
+    for (const node of effectiveTree) {
+      visit(node, []);
     }
     return visibleNodes;
   });
@@ -243,29 +262,27 @@
   {/if}
 {/snippet}
 
-{#snippet copyButton(node: TreeNode<TreeNodeMeta>)}
-  {@const cssVariable = referenceToVariable(
-    { ref: node.nodeId },
-    treeState.nodes(),
-  )}
+{#snippet copyButton(effectiveNode: EffectiveTreeNode)}
+  {@const cssVariable = effectiveNodeToVariable(effectiveNode)}
   <div class="copy-css-button">
     <CopyButton label="Copy CSS Variable" data={cssVariable} />
   </div>
 {/snippet}
 
 {#snippet tokenCard(
-  node: TreeNode<TreeNodeMeta>,
+  effectiveNode: EffectiveTreeNode,
   tokenMeta: TokenMeta,
   index: number,
-  parentId?: string,
+  siblings: EffectiveTreeNode[],
 )}
+  {@const node = effectiveNode.node}
   {@const tokenValue = resolveTokenValue(node, treeState.nodes())}
   <div class="token-card" data-deprecated={Boolean(tokenMeta.deprecated)}>
     {#if tokenValue.type === "color"}
       {@const color = serializeColor(tokenValue.value)}
       <div class="token-preview">
         <div class="color-preview" style="background: {color};"></div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -279,7 +296,7 @@
         <div class="dimension-preview" style:--value={value}>
           <div class="dimension-bar"></div>
         </div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -294,7 +311,7 @@
           cubicBezier: [0, 0, 1, 1],
           duration: tokenValue.value,
         })}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -310,7 +327,7 @@
           id: `styleguide-cubic-bezier-${index}`,
           cubicBezier: tokenValue.value,
         })}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -321,11 +338,10 @@
     {/if}
 
     {#if tokenValue.type === "number"}
-      {@const groupTokens = treeState
-        .getChildren(parentId)
-        .filter((n) => n.meta.nodeType === "token")
-        .map((n) => {
-          const val = resolveTokenValue(n, treeState.nodes());
+      {@const groupTokens = siblings
+        .filter((item) => item.node.meta.nodeType === "token")
+        .map((item) => {
+          const val = resolveTokenValue(item.node, treeState.nodes());
           return val.type === "number" ? val.value : null;
         })
         .filter((v) => v !== null)}
@@ -334,7 +350,7 @@
           tokens: groupTokens,
           value: tokenValue.value,
         })}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -348,7 +364,7 @@
         <div class="typography-preview" style="font-family: {fontFamily};">
           {typographyPlaceholder}
         </div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -362,7 +378,7 @@
         <div class="typography-preview" style="font-weight: {weight};">
           {typographyPlaceholder}
         </div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -379,7 +395,7 @@
           delay: transition.delay,
           cubicBezier: transition.timingFunction,
         })}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -405,7 +421,7 @@
         >
           {typographyPlaceholder}
         </div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -426,7 +442,7 @@
           class="gradient-preview"
           style="background-image: {gradient};"
         ></div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -447,7 +463,7 @@
           class="shadow-preview"
           style="box-shadow: {toShadowValue(tokenValue.value, new Map())};"
         ></div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -471,7 +487,7 @@
           class="border-preview"
           style="border: {width} {style} {color};"
         ></div>
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -486,7 +502,7 @@
     {#if tokenValue.type === "strokeStyle"}
       <div class="token-preview">
         {@render strokeStylePreview(tokenValue.value)}
-        {@render copyButton(node)}
+        {@render copyButton(effectiveNode)}
       </div>
       <div class="token-content">
         {@render metadata(tokenMeta)}
@@ -498,44 +514,46 @@
   </div>
 {/snippet}
 
-{#snippet renderNodes(parentId: string | undefined, depth: number)}
-  {@const children = treeState
-    .getChildren(parentId)
-    .filter((node) => visibleNodes.size === 0 || visibleNodes.has(node.nodeId))}
-  {@const tokens = children.filter((node) => node.meta.nodeType === "token")}
+{#snippet renderNodes(effectiveNodes: EffectiveTreeNode[], depth: number)}
+  {@const children = effectiveNodes.filter(
+    (item) => visibleNodes.size === 0 || visibleNodes.has(item.node.nodeId),
+  )}
+  {@const tokens = children.filter(
+    (item) => item.node.meta.nodeType === "token",
+  )}
   {@const groups = children.filter(
-    (node) =>
-      node.meta.nodeType === "token-set" ||
-      node.meta.nodeType === "token-group",
+    (item) =>
+      item.node.meta.nodeType === "token-set" ||
+      item.node.meta.nodeType === "token-group",
   )}
   <!-- render tokens first and then groups to strictly co-locate
   headings with content which can have nested headings -->
   {#if tokens.length > 0}
     <div class="token-grid">
-      {#each tokens as node, index (node.nodeId)}
-        {#if node.meta.nodeType === "token"}
-          {@render tokenCard(node, node.meta, index, parentId)}
+      {#each tokens as item, index (item.node.nodeId)}
+        {#if item.node.meta.nodeType === "token"}
+          {@render tokenCard(item, item.node.meta, index, children)}
         {/if}
       {/each}
     </div>
   {/if}
-  {#each groups as group (group.nodeId)}
+  {#each groups as group (group.node.nodeId)}
     <svelte:element this={`h${depth}`}>
-      {titleCase(noCase(group.meta.name))}
+      {titleCase(noCase(group.node.meta.name))}
     </svelte:element>
-    {#if group.meta.description}
+    {#if group.node.meta.description}
       <p>
-        {group.meta.description}
+        {group.node.meta.description}
       </p>
     {/if}
-    {@render renderNodes(group.nodeId, depth + 1)}
+    {@render renderNodes(group.children, depth + 1)}
   {/each}
 {/snippet}
 
 <div class="styleguide">
   <div class="container">
     <h1>Design Tokens Styleguide</h1>
-    {@render renderNodes(undefined, 2)}
+    {@render renderNodes(effectiveTree, 2)}
   </div>
 </div>
 

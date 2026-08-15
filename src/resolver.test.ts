@@ -1,5 +1,9 @@
 import { test, expect, describe } from "vitest";
 import {
+  rawResolverDocumentSchema,
+  type RawResolverDocument,
+} from "./dtcg.schema";
+import {
   parseTokenResolver,
   serializeTokenResolver,
   isResolverFormat,
@@ -55,6 +59,52 @@ describe("isResolverFormat", () => {
   });
 });
 
+describe("rawResolverDocumentSchema", () => {
+  test("accepts references and inline sources throughout raw resolver input", () => {
+    const document: RawResolverDocument = {
+      version: "2025.10",
+      sets: {
+        base: {
+          sources: [
+            { $ref: "#/$defs/base", description: "reference override" },
+            {},
+          ],
+        },
+      },
+      modifiers: {
+        theme: {
+          contexts: {
+            dark: [{ $ref: "#/sets/base" }, {}],
+          },
+        },
+      },
+      resolutionOrder: [
+        { $ref: "#/sets/base" },
+        {
+          type: "set",
+          name: "InlineSet",
+          sources: [{ $ref: "#/$defs/base" }, {}],
+        },
+        {
+          type: "modifier",
+          name: "InlineModifier",
+          contexts: { dark: [{ $ref: "#/sets/base" }, {}] },
+        },
+      ],
+      $defs: { base: {} },
+    };
+
+    const result = rawResolverDocumentSchema.safeParse(document);
+
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("Expected raw resolver to validate");
+    expect(result.data.sets?.base.sources[0]).toEqual({
+      $ref: "#/$defs/base",
+      description: "reference override",
+    });
+  });
+});
+
 describe("parseTokenResolver", () => {
   test("rejects input without version field", () => {
     const result = parseTokenResolver({
@@ -73,22 +123,34 @@ describe("parseTokenResolver", () => {
     expect(result.errors[0].message).toContain("version");
   });
 
-  test("rejects root-level sets object with property keys", () => {
+  test("accepts root-level set definitions referenced by resolutionOrder", () => {
     const result = parseTokenResolver({
       version: "2025.10",
       sets: { someSet: { sources: [] } },
-      resolutionOrder: [],
-    } as unknown);
-    expect(result.errors.length).toBeGreaterThan(0);
+      resolutionOrder: [{ $ref: "#/sets/someSet" }],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    expect(
+      result.nodes.find((node) => node.meta.nodeType === "token-set")?.meta
+        .name,
+    ).toBe("someSet");
   });
 
-  test("rejects root-level modifiers object with property keys", () => {
+  test("accepts root-level modifier definitions referenced by resolutionOrder", () => {
     const result = parseTokenResolver({
       version: "2025.10",
-      modifiers: { someModifier: { contexts: {} } },
-      resolutionOrder: [],
-    } as unknown);
-    expect(result.errors.length).toBeGreaterThan(0);
+      modifiers: {
+        someModifier: { contexts: { enabled: [], disabled: [] } },
+      },
+      resolutionOrder: [{ $ref: "#/modifiers/someModifier" }],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    expect(
+      result.nodes.find((node) => node.meta.nodeType === "token-modifier")?.meta
+        .name,
+    ).toBe("someModifier");
   });
 
   test("accepts valid minimal resolver with empty resolutionOrder", () => {
@@ -603,6 +665,118 @@ describe("parseTokenResolver", () => {
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
+  test.each([
+    {
+      name: "inline modifier",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [{ type: "modifier", name: "Theme", contexts: {} }],
+      },
+      path: "resolutionOrder[0].contexts",
+    },
+    {
+      name: "root-referenced modifier",
+      document: {
+        version: "2025.10",
+        modifiers: { theme: { contexts: {} } },
+        resolutionOrder: [{ $ref: "#/modifiers/theme" }],
+      },
+      path: "modifiers.theme.contexts",
+    },
+  ])("rejects empty contexts on a $name", ({ document, path }) => {
+    const result = parseTokenResolver(document);
+
+    expect(result.nodes).toEqual([]);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain(path);
+  });
+
+  test.each([
+    {
+      name: "inline modifier",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: { light: [] },
+            default: "dark",
+          },
+        ],
+      },
+      path: "resolutionOrder[0].default",
+    },
+    {
+      name: "root-referenced modifier",
+      document: {
+        version: "2025.10",
+        modifiers: {
+          theme: { contexts: { light: [] }, default: "dark" },
+        },
+        resolutionOrder: [{ $ref: "#/modifiers/theme" }],
+      },
+      path: "modifiers.theme.default",
+    },
+  ])(
+    "rejects a default absent from contexts on a $name",
+    ({ document, path }) => {
+      const result = parseTokenResolver(document);
+
+      expect(result.nodes).toEqual([]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].message).toContain(path);
+      expect(result.errors[0].message).toContain("contexts");
+    },
+  );
+
+  test.each(["toString", "constructor"])(
+    "rejects inherited context key %s as a modifier default",
+    (defaultContext) => {
+      const result = parseTokenResolver({
+        version: "2025.10",
+        resolutionOrder: [
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: { light: [] },
+            default: defaultContext,
+          },
+        ],
+      });
+
+      expect(result.nodes).toEqual([]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].message).toContain("resolutionOrder[0].default");
+    },
+  );
+
+  test.each(["toString", "constructor"])(
+    "accepts own context key %s as a modifier default",
+    (defaultContext) => {
+      const result = parseTokenResolver({
+        version: "2025.10",
+        resolutionOrder: [
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: { [defaultContext]: [] },
+            default: defaultContext,
+          },
+        ],
+      });
+
+      expect(result.errors).toEqual([]);
+      expect(
+        result.nodes.some(
+          (node) =>
+            node.meta.nodeType === "token-context" &&
+            node.meta.name === defaultContext,
+        ),
+      ).toBe(true);
+    },
+  );
+
   test("accepts modifier with optional default", () => {
     const result = parseTokenResolver({
       version: "2025.10",
@@ -656,9 +830,501 @@ describe("parseTokenResolver", () => {
     });
     expect(result.errors).toHaveLength(0);
   });
+
+  test("normalizes escaped root references while preserving mixed array order", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      sets: {
+        "core/palette~": {
+          description: "Referenced set",
+          sources: [],
+        },
+      },
+      modifiers: {
+        theme: {
+          contexts: { light: [], dark: [] },
+        },
+      },
+      resolutionOrder: [
+        { $ref: "#/modifiers/theme" },
+        { type: "set", name: "Inline", sources: [] },
+        { $ref: "#/sets/core~1palette~0" },
+      ],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    expect(
+      result.nodes
+        .filter((node) => node.parentId === undefined)
+        .map((node) => [node.meta.nodeType, node.meta.name]),
+    ).toEqual([
+      ["token-modifier", "theme"],
+      ["token-set", "Inline"],
+      ["token-set", "core/palette~"],
+    ]);
+
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+    expect(
+      serialized.resolutionOrder.map(({ type, name }) => [type, name]),
+    ).toEqual([
+      ["modifier", "theme"],
+      ["set", "Inline"],
+      ["set", "core/palette~"],
+    ]);
+    expect(serialized).not.toHaveProperty("sets");
+    expect(serialized).not.toHaveProperty("modifiers");
+  });
+
+  test.each([
+    {
+      collision: "set/set",
+      resolutionOrder: [
+        { type: "set", name: "Duplicate", sources: [] },
+        { type: "set", name: "Duplicate", sources: [] },
+      ],
+    },
+    {
+      collision: "modifier/modifier",
+      resolutionOrder: [
+        { type: "modifier", name: "Duplicate", contexts: { one: [] } },
+        { type: "modifier", name: "Duplicate", contexts: { two: [] } },
+      ],
+    },
+    {
+      collision: "set/modifier",
+      resolutionOrder: [
+        { type: "set", name: "Duplicate", sources: [] },
+        { type: "modifier", name: "Duplicate", contexts: { one: [] } },
+      ],
+    },
+  ])(
+    "rejects a $collision name collision before creating editor nodes",
+    ({ resolutionOrder }) => {
+      const result = parseTokenResolver({
+        version: "2025.10",
+        resolutionOrder,
+      });
+
+      expect(result.errors).toEqual([
+        {
+          path: "/resolutionOrder/1/name",
+          message: 'Duplicate resolutionOrder name: "Duplicate"',
+        },
+      ]);
+      expect(result.nodes).toHaveLength(0);
+    },
+  );
+
+  test("materializes $defs sources and merges source arrays in order", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      $defs: {
+        "base/tokens": {
+          color: {
+            $type: "color",
+            $value: { colorSpace: "srgb", components: [1, 0, 0] },
+          },
+          spacing: {
+            $type: "dimension",
+            $value: { value: 4, unit: "px" },
+          },
+        },
+      },
+      sets: {
+        foundation: {
+          sources: [
+            { $ref: "#/$defs/base~1tokens" },
+            {
+              color: {
+                $type: "color",
+                $value: { colorSpace: "srgb", components: [0, 0, 1] },
+              },
+            },
+          ],
+        },
+      },
+      resolutionOrder: [{ $ref: "#/sets/foundation" }],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+    const set = serialized.resolutionOrder[0];
+    expect(set.type).toBe("set");
+    if (set.type !== "set") throw new Error("Expected a set");
+    expect(set.sources).toHaveLength(1);
+    expect(set.sources[0]).toMatchObject({
+      color: {
+        $value: { colorSpace: "srgb", components: [0, 0, 1] },
+      },
+      spacing: { $value: { value: 4, unit: "px" } },
+    });
+    expect(JSON.stringify(serialized)).not.toContain("$ref");
+  });
+
+  test("expands a set reference inside a modifier context at its array position", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      sets: {
+        base: {
+          sources: [
+            {
+              color: {
+                $type: "color",
+                $value: { colorSpace: "srgb", components: [1, 0, 0] },
+              },
+            },
+            {
+              spacing: {
+                $type: "dimension",
+                $value: { value: 4, unit: "px" },
+              },
+            },
+          ],
+        },
+      },
+      modifiers: {
+        theme: {
+          contexts: {
+            dark: [
+              { $ref: "#/sets/base" },
+              {
+                color: {
+                  $type: "color",
+                  $value: { colorSpace: "srgb", components: [0, 0, 0] },
+                },
+              },
+            ],
+          },
+        },
+      },
+      resolutionOrder: [{ $ref: "#/modifiers/theme" }],
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+    const modifier = serialized.resolutionOrder[0];
+    expect(modifier.type).toBe("modifier");
+    if (modifier.type !== "modifier") throw new Error("Expected a modifier");
+    expect(modifier.contexts.dark).toHaveLength(1);
+    expect(modifier.contexts.dark[0]).toMatchObject({
+      color: {
+        $value: { colorSpace: "srgb", components: [0, 0, 0] },
+      },
+      spacing: { $value: { value: 4, unit: "px" } },
+    });
+  });
+
+  test.each([
+    {
+      name: "set sources referencing modifiers",
+      document: {
+        version: "2025.10",
+        modifiers: { theme: { contexts: { dark: [] } } },
+        resolutionOrder: [
+          {
+            type: "set",
+            name: "Invalid",
+            sources: [{ $ref: "#/modifiers/theme" }],
+          },
+        ],
+      },
+      path: "/resolutionOrder/0/sources/0/$ref",
+    },
+    {
+      name: "modifier contexts referencing modifiers",
+      document: {
+        version: "2025.10",
+        modifiers: {
+          base: { contexts: { dark: [] } },
+          derived: {
+            contexts: { dark: [{ $ref: "#/modifiers/base" }] },
+          },
+        },
+        resolutionOrder: [{ $ref: "#/modifiers/derived" }],
+      },
+      path: "/modifiers/derived/contexts/dark/0/$ref",
+    },
+    {
+      name: "any references into resolutionOrder",
+      document: {
+        version: "2025.10",
+        sets: {
+          invalid: { sources: [{ $ref: "#/resolutionOrder/0" }] },
+        },
+        resolutionOrder: [{ type: "set", name: "Inline", sources: [] }],
+      },
+      path: "/sets/invalid/sources/0/$ref",
+    },
+  ])("rejects $name", ({ document, path }) => {
+    const result = parseTokenResolver(document);
+
+    expect(result.errors).toContainEqual({
+      path,
+      message: expect.stringContaining("not allowed"),
+    });
+  });
+
+  test.each([
+    {
+      name: "a top-level self-reference at a nonzero index",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          { $ref: "#/resolutionOrder/1" },
+        ],
+      },
+      path: "/resolutionOrder/1/$ref",
+      reference: "#/resolutionOrder/1",
+    },
+    {
+      name: "a top-level non-self reference",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          { $ref: "#/resolutionOrder/0" },
+        ],
+      },
+      path: "/resolutionOrder/1/$ref",
+      reference: "#/resolutionOrder/0",
+    },
+    {
+      name: "a nested set source self-reference",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          {
+            type: "set",
+            name: "Second",
+            sources: [{ $ref: "#/resolutionOrder/1" }],
+          },
+        ],
+      },
+      path: "/resolutionOrder/1/sources/0/$ref",
+      reference: "#/resolutionOrder/1",
+    },
+    {
+      name: "a nested modifier context self-reference",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: {
+              dark: [{ $ref: "#/resolutionOrder/1" }],
+            },
+          },
+        ],
+      },
+      path: "/resolutionOrder/1/contexts/dark/0/$ref",
+      reference: "#/resolutionOrder/1",
+    },
+    {
+      name: "a nested modifier context non-self reference",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          { type: "set", name: "First", sources: [] },
+          { type: "set", name: "Second", sources: [] },
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: {
+              dark: [{ $ref: "#/resolutionOrder/0" }],
+            },
+          },
+        ],
+      },
+      path: "/resolutionOrder/2/contexts/dark/0/$ref",
+      reference: "#/resolutionOrder/0",
+    },
+  ])(
+    "reports one prohibited-target error for $name",
+    ({ document, path, reference }) => {
+      const result = parseTokenResolver(document);
+
+      expect(result.errors).toEqual([
+        {
+          path,
+          message: `References into resolutionOrder are not allowed: "${reference}"`,
+        },
+      ]);
+    },
+  );
+
+  test.each([
+    ["a $defs object", "#/$defs/source", "must target a root set"],
+    ["an external document", "tokens.json", "External JSON reference"],
+    ["a missing definition", "#/sets/missing", "target not found"],
+    ["a malformed pointer", "#invalid", "malformed JSON reference"],
+  ])("rejects a resolutionOrder reference to %s", (_name, $ref, message) => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      $defs: { source: {} },
+      resolutionOrder: [{ $ref }],
+    });
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toEqual({
+      path: "/resolutionOrder/0/$ref",
+      message: expect.stringContaining(message),
+    });
+  });
 });
 
 describe("serializeTokenResolver", () => {
+  test("rejects a modifier context extension into another context", () => {
+    const resolver = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "modifier",
+          name: "Theme",
+          contexts: {
+            light: [{ local: {} }],
+            dark: [{ foreign: {} }],
+          },
+        },
+      ],
+    });
+    const lightContext = resolver.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-context" && node.meta.name === "light",
+    );
+    const darkContext = resolver.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-context" && node.meta.name === "dark",
+    );
+    const local = resolver.nodes.find(
+      (node) =>
+        node.parentId === lightContext?.nodeId &&
+        node.meta.nodeType === "token-group",
+    );
+    const foreign = resolver.nodes.find(
+      (node) =>
+        node.parentId === darkContext?.nodeId &&
+        node.meta.nodeType === "token-group",
+    );
+    if (local?.meta.nodeType !== "token-group" || !foreign) {
+      throw new Error("Expected context groups to parse");
+    }
+    local.meta.extends = { ref: foreign.nodeId };
+
+    expect(() =>
+      serializeTokenResolver(
+        new Map(resolver.nodes.map((node) => [node.nodeId, node])),
+      ),
+    ).toThrow(
+      'Failed to serialize modifier "Theme" context "light": Group "local" extension target',
+    );
+  });
+
+  test("rejects a set extension into a modifier context", () => {
+    const resolver = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "Foundation",
+          sources: [{ local: {} }],
+        },
+        {
+          type: "modifier",
+          name: "Theme",
+          contexts: { light: [{ foreign: {} }] },
+        },
+      ],
+    });
+    const setNode = resolver.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-set" && node.meta.name === "Foundation",
+    );
+    const contextNode = resolver.nodes.find(
+      (node) => node.meta.nodeType === "token-context",
+    );
+    const local = resolver.nodes.find(
+      (node) =>
+        node.parentId === setNode?.nodeId &&
+        node.meta.nodeType === "token-group",
+    );
+    const foreign = resolver.nodes.find(
+      (node) =>
+        node.parentId === contextNode?.nodeId &&
+        node.meta.nodeType === "token-group",
+    );
+    if (local?.meta.nodeType !== "token-group" || !foreign) {
+      throw new Error("Expected set and context groups to parse");
+    }
+    local.meta.extends = { ref: foreign.nodeId };
+
+    expect(() =>
+      serializeTokenResolver(
+        new Map(resolver.nodes.map((node) => [node.nodeId, node])),
+      ),
+    ).toThrow(
+      'Failed to serialize set "Foundation": Group "local" extension target',
+    );
+  });
+
+  test("serializes a renamed and moved cross-set group extension path", () => {
+    const resolver = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "Foundation",
+          sources: [
+            {
+              base: { value: { $type: "number", $value: 1 } },
+              destination: {},
+            },
+          ],
+        },
+        {
+          type: "set",
+          name: "Components",
+          sources: [{ derived: { $extends: "{base}" } }],
+        },
+      ],
+    });
+    const foundation = resolver.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-set" && node.meta.name === "Foundation",
+    );
+    const base = resolver.nodes.find(
+      (node) =>
+        node.parentId === foundation?.nodeId && node.meta.name === "base",
+    );
+    const destination = resolver.nodes.find(
+      (node) =>
+        node.parentId === foundation?.nodeId &&
+        node.meta.name === "destination",
+    );
+    if (!base || !destination) throw new Error("Expected set groups to parse");
+    base.meta.name = "renamed";
+    base.parentId = destination.nodeId;
+
+    const serialized = serializeTokenResolver(
+      new Map(resolver.nodes.map((node) => [node.nodeId, node])),
+    );
+    expect(serialized.resolutionOrder[1]).toEqual(
+      expect.objectContaining({
+        name: "Components",
+        sources: [{ derived: { $extends: "{destination.renamed}" } }],
+      }),
+    );
+  });
+
   test("serializes single set with simple tokens", () => {
     const resolver = parseTokenResolver({
       version: "2025.10",
@@ -1146,6 +1812,105 @@ describe("serializeTokenResolver", () => {
 });
 
 describe("cross-set aliases", () => {
+  test("preserves cross-set group extensions as group NodeRefs", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "Foundation",
+          sources: [
+            {
+              base: {
+                value: { $type: "number", $value: 1 },
+              },
+            },
+          ],
+        },
+        {
+          type: "set",
+          name: "Components",
+          sources: [{ derived: { $extends: "{base}" } }],
+        },
+      ],
+    });
+
+    expect(result.errors).toEqual([]);
+    const base = result.nodes.find((node) => node.meta.name === "base");
+    const derived = result.nodes.find((node) => node.meta.name === "derived");
+    expect(derived?.meta).toEqual(
+      expect.objectContaining({
+        nodeType: "token-group",
+        extends: { ref: base?.nodeId },
+      }),
+    );
+
+    const serialized = serializeTokenResolver(
+      new Map(result.nodes.map((node) => [node.nodeId, node])),
+    );
+    expect(serialized.resolutionOrder[1]).toEqual(
+      expect.objectContaining({
+        type: "set",
+        name: "Components",
+        sources: [{ derived: { $extends: "{base}" } }],
+      }),
+    );
+  });
+
+  test("rejects a cross-set token as a group extension target", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "Foundation",
+          sources: [{ base: { $type: "number", $value: 1 } }],
+        },
+        {
+          type: "set",
+          name: "Components",
+          sources: [{ derived: { $extends: "{base}" } }],
+        },
+      ],
+    });
+
+    expect(result.errors).toContainEqual({
+      path: "derived",
+      message: 'Group extension target must be a group: "{base}"',
+    });
+  });
+
+  test("reports group extension cycles across sets", () => {
+    const result = parseTokenResolver({
+      version: "2025.10",
+      resolutionOrder: [
+        {
+          type: "set",
+          name: "First",
+          sources: [{ first: { $extends: "{second}" } }],
+        },
+        {
+          type: "set",
+          name: "Second",
+          sources: [{ second: { $extends: "{first}" } }],
+        },
+      ],
+    });
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "first",
+          message: expect.stringContaining("Circular group extension"),
+        }),
+        expect.objectContaining({
+          path: "second",
+          message: expect.stringContaining("Circular group extension"),
+        }),
+      ]),
+    );
+  });
+
   test("allows tokens to reference tokens from other sets", () => {
     const result = parseTokenResolver({
       version: "2025.10",

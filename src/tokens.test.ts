@@ -1123,6 +1123,219 @@ describe("parseDesignTokens", () => {
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].path).toBe("invalidBorder");
   });
+
+  test("materializes token value JSON references and serializes inline values", () => {
+    const result = parseDesignTokens({
+      numbers: {
+        $type: "number",
+        base: { $value: 4 },
+        copied: { $value: { $ref: "#/numbers/base/$value" } },
+      },
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(
+      result.nodes.find(
+        (node) => node.meta.nodeType === "token" && node.meta.name === "copied",
+      )?.meta,
+    ).toEqual(
+      expect.objectContaining({ nodeType: "token", type: "number", value: 4 }),
+    );
+    expect(serializeDesignTokens(nodesToMap(result.nodes))).toEqual({
+      numbers: {
+        $type: "number",
+        base: { $value: 4 },
+        copied: { $value: 4 },
+      },
+    });
+  });
+
+  test("materializes composite property JSON references and serializes inline values", () => {
+    const result = parseDesignTokens({
+      dimensions: {
+        $type: "dimension",
+        thin: { $value: { value: 1, unit: "px" } },
+      },
+      borders: {
+        $type: "border",
+        subtle: {
+          $value: {
+            color: { colorSpace: "srgb", components: [0.5, 0.5, 0.5] },
+            width: { $ref: "#/dimensions/thin/$value" },
+            style: "solid",
+          },
+        },
+      },
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(
+      result.nodes.find(
+        (node) => node.meta.nodeType === "token" && node.meta.name === "subtle",
+      )?.meta,
+    ).toEqual(
+      expect.objectContaining({
+        nodeType: "token",
+        type: "border",
+        value: {
+          color: { colorSpace: "srgb", components: [0.5, 0.5, 0.5] },
+          width: { value: 1, unit: "px" },
+          style: "solid",
+        },
+      }),
+    );
+    expect(serializeDesignTokens(nodesToMap(result.nodes))).toEqual({
+      dimensions: {
+        $type: "dimension",
+        thin: { $value: { value: 1, unit: "px" } },
+      },
+      borders: {
+        $type: "border",
+        subtle: {
+          $value: {
+            color: { colorSpace: "srgb", components: [0.5, 0.5, 0.5] },
+            width: { value: 1, unit: "px" },
+            style: "solid",
+          },
+        },
+      },
+    });
+  });
+
+  test("preserves opaque extension references while materializing token values", () => {
+    const result = parseDesignTokens({
+      base: { $type: "number", $value: 4 },
+      copied: {
+        $type: "number",
+        $value: { $ref: "#/base/$value" },
+        $extensions: {
+          "org.example": { metadata: { $ref: "#/base/$value" } },
+        },
+      },
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(serializeDesignTokens(nodesToMap(result.nodes))).toEqual({
+      base: { $type: "number", $value: 4 },
+      copied: {
+        $type: "number",
+        $value: 4,
+        $extensions: {
+          "org.example": { metadata: { $ref: "#/base/$value" } },
+        },
+      },
+    });
+  });
+
+  test("merges JSON reference errors while retaining valid parsed tokens", () => {
+    const result = parseDesignTokens({
+      valid: { $type: "number", $value: 4 },
+      broken: {
+        $type: "number",
+        $value: { $ref: "#/missing/$value" },
+      },
+    });
+
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0].meta.name).toBe("valid");
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        {
+          path: "/broken/$value/$ref",
+          message: 'JSON Pointer target not found: "#/missing/$value"',
+        },
+        {
+          path: "broken",
+          message: "✖ Invalid input",
+        },
+      ]),
+    );
+  });
+
+  test("reports external JSON references without mutating the input", () => {
+    const input = {
+      valid: { $type: "number", $value: 4 },
+      external: {
+        $type: "number",
+        $value: { $ref: "tokens.json#/numbers/base/$value" },
+      },
+    };
+    const original = structuredClone(input);
+
+    const result = parseDesignTokens(input);
+
+    expect(result.errors).toContainEqual({
+      path: "/external/$value/$ref",
+      message:
+        'External JSON reference is not supported: "tokens.json#/numbers/base/$value"',
+    });
+    expect(input).toEqual(original);
+  });
+
+  test("stores group $extends as a reference to the target group", () => {
+    const result = parseDesignTokens({
+      base: {
+        value: { $type: "number", $value: 1 },
+      },
+      derived: {
+        $extends: "{base}",
+      },
+    });
+
+    expect(result.errors).toEqual([]);
+    const base = result.nodes.find((node) => node.meta.name === "base");
+    const derived = result.nodes.find((node) => node.meta.name === "derived");
+    expect(base?.meta.nodeType).toBe("token-group");
+    expect(derived?.meta).toEqual(
+      expect.objectContaining({
+        nodeType: "token-group",
+        extends: { ref: base?.nodeId },
+      }),
+    );
+  });
+
+  test("reports a missing $extends group target", () => {
+    const result = parseDesignTokens({
+      derived: { $extends: "{missing}" },
+    });
+
+    expect(result.errors).toContainEqual({
+      path: "derived",
+      message: 'Group extension target not found: "{missing}"',
+    });
+  });
+
+  test("rejects a token as an $extends target", () => {
+    const result = parseDesignTokens({
+      base: { $type: "number", $value: 1 },
+      derived: { $extends: "{base}" },
+    });
+
+    expect(result.errors).toContainEqual({
+      path: "derived",
+      message: 'Group extension target must be a group: "{base}"',
+    });
+  });
+
+  test("reports group extension cycles", () => {
+    const result = parseDesignTokens({
+      first: { $extends: "{second}" },
+      second: { $extends: "{first}" },
+    });
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "first",
+          message: expect.stringContaining("Circular group extension"),
+        }),
+        expect.objectContaining({
+          path: "second",
+          message: expect.stringContaining("Circular group extension"),
+        }),
+      ]),
+    );
+  });
 });
 
 describe("serializeDesignTokens", () => {
@@ -1201,6 +1414,108 @@ describe("serializeDesignTokens", () => {
     const parsed = parseDesignTokens(input);
     const serialized = serializeDesignTokens(nodesToMap(parsed.nodes));
     expect(serialized).toEqual(input);
+  });
+
+  test("serializes $extends using the target group's current path", () => {
+    const parsed = parseDesignTokens({
+      original: {
+        base: {
+          value: { $type: "number", $value: 1 },
+        },
+      },
+      destination: {},
+      derived: { $extends: "{original.base}" },
+    });
+    const target = parsed.nodes.find((node) => node.meta.name === "base");
+    const destination = parsed.nodes.find(
+      (node) => node.meta.name === "destination",
+    );
+    if (!target || !destination) throw new Error("Expected groups to parse");
+
+    target.meta.name = "renamed";
+    target.parentId = destination.nodeId;
+
+    expect(serializeDesignTokens(nodesToMap(parsed.nodes))).toEqual({
+      original: {},
+      destination: {
+        renamed: {
+          value: { $type: "number", $value: 1 },
+        },
+      },
+      derived: { $extends: "{destination.renamed}" },
+    });
+  });
+
+  test("rejects a token $extends target during serialization", () => {
+    const parsed = parseDesignTokens({
+      base: { value: { $type: "number", $value: 1 } },
+      derived: {},
+    });
+    const target = parsed.nodes.find(
+      (node) => node.meta.nodeType === "token" && node.meta.name === "value",
+    );
+    const derived = parsed.nodes.find(
+      (node) =>
+        node.meta.nodeType === "token-group" && node.meta.name === "derived",
+    );
+    if (!target || derived?.meta.nodeType !== "token-group") {
+      throw new Error("Expected token and group to parse");
+    }
+    derived.meta.extends = { ref: target.nodeId };
+
+    expect(() => serializeDesignTokens(nodesToMap(parsed.nodes))).toThrow(
+      'Group "derived" cannot extend token "base.value"',
+    );
+  });
+
+  test("rejects a missing $extends target during serialization", () => {
+    const parsed = parseDesignTokens({ derived: {} });
+    const derived = parsed.nodes[0];
+    if (derived?.meta.nodeType !== "token-group") {
+      throw new Error("Expected group to parse");
+    }
+    derived.meta.extends = { ref: "missing-group" };
+
+    expect(() => serializeDesignTokens(nodesToMap(parsed.nodes))).toThrow(
+      'Group "derived" extension target "missing-group" not found',
+    );
+  });
+
+  test("rejects a self-referencing $extends during serialization", () => {
+    const parsed = parseDesignTokens({ derived: {} });
+    const derived = parsed.nodes[0];
+    if (derived?.meta.nodeType !== "token-group") {
+      throw new Error("Expected group to parse");
+    }
+    derived.meta.extends = { ref: derived.nodeId };
+
+    expect(() => serializeDesignTokens(nodesToMap(parsed.nodes))).toThrow(
+      "Circular group extension detected: derived -> derived",
+    );
+  });
+
+  test("rejects a three-group $extends cycle during serialization", () => {
+    const parsed = parseDesignTokens({ first: {}, second: {}, third: {} });
+    const groups = new Map(
+      parsed.nodes.map((node) => [node.meta.name, node] as const),
+    );
+    const first = groups.get("first");
+    const second = groups.get("second");
+    const third = groups.get("third");
+    if (
+      first?.meta.nodeType !== "token-group" ||
+      second?.meta.nodeType !== "token-group" ||
+      third?.meta.nodeType !== "token-group"
+    ) {
+      throw new Error("Expected groups to parse");
+    }
+    first.meta.extends = { ref: second.nodeId };
+    second.meta.extends = { ref: third.nodeId };
+    third.meta.extends = { ref: first.nodeId };
+
+    expect(() => serializeDesignTokens(nodesToMap(parsed.nodes))).toThrow(
+      "Circular group extension detected: first -> second -> third -> first",
+    );
   });
 
   test("preserves deprecated flags", () => {

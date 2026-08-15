@@ -1,5 +1,5 @@
 // Zod schema based on Design Tokens Community Group specification
-// does not support JSON Pointer references
+// JSON Pointer references are materialized before these canonical schemas run.
 
 import * as z from "zod/mini";
 
@@ -267,6 +267,39 @@ export const resolverSourceSchema = z.record(
 
 export type ResolverSource = z.infer<typeof resolverSourceSchema>;
 
+export const resolverReferenceSchema = z.looseObject({
+  $ref: z.string(),
+});
+
+export type ResolverReference = z.infer<typeof resolverReferenceSchema>;
+
+export const rawResolverSourceSchema = z.union([
+  resolverReferenceSchema,
+  resolverSourceSchema.check(
+    z.refine((source) => !("$ref" in source), "A source $ref must be a string"),
+  ),
+]);
+
+export type RawResolverSource = z.infer<typeof rawResolverSourceSchema>;
+
+export const resolverSetDefinitionSchema = z.object({
+  sources: z.array(resolverSourceSchema),
+  description: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type ResolverSetDefinition = z.infer<typeof resolverSetDefinitionSchema>;
+
+export const rawResolverSetDefinitionSchema = z.object({
+  sources: z.array(rawResolverSourceSchema),
+  description: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type RawResolverSetDefinition = z.infer<
+  typeof rawResolverSetDefinitionSchema
+>;
+
 // Set in resolutionOrder array - collection of design tokens
 export const resolverSetSchema = z.object({
   type: z.literal("set"),
@@ -278,11 +311,53 @@ export const resolverSetSchema = z.object({
 
 export type ResolverSet = z.infer<typeof resolverSetSchema>;
 
+export const rawResolverSetSchema = z.object({
+  type: z.literal("set"),
+  name: nameSchema,
+  sources: z.array(rawResolverSourceSchema),
+  description: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type RawResolverSet = z.infer<typeof rawResolverSetSchema>;
+
 // Modifier contexts - map of context name to sources
 export const resolverModifierContextsSchema = z.record(
   z.string(), // context name (e.g., "light", "dark")
   z.array(resolverSourceSchema), // sources array (non-optional)
 );
+
+export const rawResolverModifierContextsSchema = z.record(
+  z.string(),
+  z.array(rawResolverSourceSchema),
+);
+
+type ResolverModifierShape = {
+  contexts: Record<string, unknown>;
+  default?: string;
+};
+
+export const resolverModifierDefinitionSchema = z.object({
+  contexts: resolverModifierContextsSchema,
+  description: z.optional(z.string()),
+  default: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type ResolverModifierDefinition = z.infer<
+  typeof resolverModifierDefinitionSchema
+>;
+
+export const rawResolverModifierDefinitionSchema = z.object({
+  contexts: rawResolverModifierContextsSchema,
+  description: z.optional(z.string()),
+  default: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type RawResolverModifierDefinition = z.infer<
+  typeof rawResolverModifierDefinitionSchema
+>;
 
 // Modifier in resolutionOrder - for documentation, parsed but skipped
 export const resolverModifierSchema = z.object({
@@ -296,6 +371,17 @@ export const resolverModifierSchema = z.object({
 
 export type ResolverModifier = z.infer<typeof resolverModifierSchema>;
 
+export const rawResolverModifierSchema = z.object({
+  type: z.literal("modifier"),
+  name: nameSchema,
+  contexts: rawResolverModifierContextsSchema,
+  description: z.optional(z.string()),
+  default: z.optional(z.string()),
+  $extensions: z.optional(z.record(z.string(), z.unknown())),
+});
+
+export type RawResolverModifier = z.infer<typeof rawResolverModifierSchema>;
+
 // Item in resolutionOrder array
 export const resolutionOrderItemSchema = z.union([
   resolverSetSchema,
@@ -304,19 +390,98 @@ export const resolutionOrderItemSchema = z.union([
 
 export type ResolutionOrderItem = z.infer<typeof resolutionOrderItemSchema>;
 
-// Unsupported root-level sets and modifiers
-// These reject any object with properties - only allow undefined or empty object
-const unsupportedSetsSchema = z.optional(z.strictObject({}));
-const unsupportedModifiersSchema = z.optional(z.strictObject({}));
+export const rawResolutionOrderItemSchema = z.union([
+  resolverReferenceSchema,
+  rawResolverSetSchema,
+  rawResolverModifierSchema,
+]);
+
+export type RawResolutionOrderItem = z.infer<
+  typeof rawResolutionOrderItemSchema
+>;
+
+type ResolverDocumentModifierShape = {
+  modifiers?: Record<string, ResolverModifierShape>;
+  resolutionOrder: Array<unknown>;
+};
+
+const resolverModifierSemantics = z.check<ResolverDocumentModifierShape>(
+  (context) => {
+    const validate = (
+      modifier: ResolverModifierShape,
+      path: Array<string | number>,
+    ): void => {
+      if (Object.keys(modifier.contexts).length === 0) {
+        context.issues.push({
+          code: "custom",
+          input: modifier.contexts,
+          message: "Modifier contexts must not be empty",
+          path: [...path, "contexts"],
+        });
+      }
+      if (
+        modifier.default !== undefined &&
+        !Object.hasOwn(modifier.contexts, modifier.default)
+      ) {
+        context.issues.push({
+          code: "custom",
+          input: modifier.default,
+          message: `Modifier default must name an entry in contexts: "${modifier.default}"`,
+          path: [...path, "default"],
+        });
+      }
+    };
+
+    for (const [name, modifier] of Object.entries(
+      context.value.modifiers ?? {},
+    )) {
+      validate(modifier, ["modifiers", name]);
+    }
+    context.value.resolutionOrder.forEach((item, index) => {
+      if (
+        typeof item === "object" &&
+        item !== null &&
+        "type" in item &&
+        item.type === "modifier" &&
+        "contexts" in item
+      ) {
+        validate(item as ResolverModifierShape, ["resolutionOrder", index]);
+      }
+    });
+  },
+);
 
 // Resolver document following Design Tokens Resolver Module 2025.10
-export const resolverDocumentSchema = z.object({
-  version: z.literal("2025.10"),
-  name: z.optional(z.string()),
-  description: z.optional(z.string()),
-  sets: z.optional(unsupportedSetsSchema),
-  modifiers: z.optional(unsupportedModifiersSchema),
-  resolutionOrder: z.array(resolutionOrderItemSchema),
-});
+export const resolverDocumentSchema = z
+  .object({
+    version: z.literal("2025.10"),
+    name: z.optional(z.string()),
+    description: z.optional(z.string()),
+    $schema: z.optional(z.string()),
+    $defs: z.optional(z.record(z.string(), z.unknown())),
+    sets: z.optional(z.record(z.string(), resolverSetDefinitionSchema)),
+    modifiers: z.optional(
+      z.record(z.string(), resolverModifierDefinitionSchema),
+    ),
+    resolutionOrder: z.array(resolutionOrderItemSchema),
+  })
+  .check(resolverModifierSemantics);
 
 export type ResolverDocument = z.infer<typeof resolverDocumentSchema>;
+
+export const rawResolverDocumentSchema = z
+  .object({
+    version: z.literal("2025.10"),
+    name: z.optional(z.string()),
+    description: z.optional(z.string()),
+    $schema: z.optional(z.string()),
+    $defs: z.optional(z.record(z.string(), z.unknown())),
+    sets: z.optional(z.record(z.string(), rawResolverSetDefinitionSchema)),
+    modifiers: z.optional(
+      z.record(z.string(), rawResolverModifierDefinitionSchema),
+    ),
+    resolutionOrder: z.array(rawResolutionOrderItemSchema),
+  })
+  .check(resolverModifierSemantics);
+
+export type RawResolverDocument = z.infer<typeof rawResolverDocumentSchema>;

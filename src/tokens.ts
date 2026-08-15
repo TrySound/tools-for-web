@@ -22,6 +22,7 @@ import {
   type Group,
   type Token,
 } from "./dtcg.schema";
+import { materializeJsonReferences } from "./json-pointer";
 import { backwardCompatibleTokenSchema } from "./legacy.schema";
 
 type TreeNodeMeta = GroupMeta | TokenMeta;
@@ -211,6 +212,53 @@ export const resolveIntermediaryNodes = (
   const nodes: TreeNode<TreeNodeMeta>[] = [];
   const errors: Array<{ path: string; message: string }> = [];
   const lastChildIndexPerParent = new Map<string | undefined, string>();
+  const pathByNodeId = new Map(
+    Array.from(availableNodes, ([path, node]) => [node.nodeId, path]),
+  );
+
+  const resolveGroupExtension = (
+    path: string,
+    groupNode: IntermediaryNode,
+    reference: string,
+  ): NodeRef | undefined => {
+    const target = availableNodes.get(getPathFromTokenRef(reference));
+    if (!target) {
+      errors.push({
+        path,
+        message: `Group extension target not found: "${reference}"`,
+      });
+      return;
+    }
+    if ("$value" in target.payload) {
+      errors.push({
+        path,
+        message: `Group extension target must be a group: "${reference}"`,
+      });
+      return;
+    }
+
+    const visited = new Set([groupNode.nodeId]);
+    const chain = [path];
+    let current: IntermediaryNode | undefined = target;
+    while (current) {
+      const currentPath = pathByNodeId.get(current.nodeId) ?? current.name;
+      chain.push(currentPath);
+      if (visited.has(current.nodeId)) {
+        errors.push({
+          path,
+          message: `Circular group extension detected: ${chain.join(" -> ")}`,
+        });
+        break;
+      }
+      visited.add(current.nodeId);
+      if ("$value" in current.payload || !current.payload.$extends) break;
+      current = availableNodes.get(
+        getPathFromTokenRef(current.payload.$extends),
+      );
+    }
+
+    return { ref: target.nodeId };
+  };
 
   // Helper to resolve the type of a token alias by following the reference chain
   const resolveAliasType = (value: string): TokenType | undefined => {
@@ -392,6 +440,9 @@ export const resolveIntermediaryNodes = (
       meta = {
         nodeType: "token-group",
         name: intermediaryNode.name,
+        extends: group.$extends
+          ? resolveGroupExtension(path, intermediaryNode, group.$extends)
+          : undefined,
         type: intermediaryNode.type,
         description: group.$description,
         deprecated: group.$deprecated,
@@ -409,13 +460,22 @@ export const resolveIntermediaryNodes = (
 };
 
 export const parseDesignTokens = (input: unknown): ParseResult => {
+  const { value: materializedInput, errors: materializationErrors } =
+    materializeJsonReferences(input);
   const { nodes: intermediaryNodes, errors: intermediaryErrors } =
-    extractIntermediaryNodes(input);
+    extractIntermediaryNodes(materializedInput);
   const { nodes, errors: resolverErrors } = resolveIntermediaryNodes(
     intermediaryNodes,
     intermediaryNodes,
   );
-  return { nodes, errors: [...intermediaryErrors, ...resolverErrors] };
+  return {
+    nodes,
+    errors: [
+      ...materializationErrors,
+      ...intermediaryErrors,
+      ...resolverErrors,
+    ],
+  };
 };
 
 export const serializeDesignTokens = (
@@ -458,6 +518,49 @@ export const serializeDesignTokens = (
   };
   buildPathMap(undefined);
 
+  const validateGroupExtension = (groupNode: TreeNode<GroupMeta>): void => {
+    const visitedAt = new Map<string, number>();
+    const chain: string[] = [];
+    let current = groupNode;
+
+    while (true) {
+      const currentPath = nodeIdToPath.get(current.nodeId) ?? current.nodeId;
+      const cycleStart = visitedAt.get(current.nodeId);
+      if (cycleStart !== undefined) {
+        throw Error(
+          `Circular group extension detected: ${[
+            ...chain.slice(cycleStart),
+            currentPath,
+          ].join(" -> ")}`,
+        );
+      }
+      visitedAt.set(current.nodeId, chain.length);
+      chain.push(currentPath);
+
+      const extension = current.meta.extends;
+      if (!extension) return;
+      const target = availableNodes.get(extension.ref);
+      if (!target) {
+        throw Error(
+          `Group "${currentPath}" extension target "${extension.ref}" not found`,
+        );
+      }
+      const targetPath = nodeIdToPath.get(target.nodeId) ?? target.nodeId;
+      if (target.meta.nodeType !== "token-group") {
+        throw Error(
+          `Group "${currentPath}" cannot extend ${target.meta.nodeType === "token" ? "token" : "node"} "${targetPath}"`,
+        );
+      }
+      current = target as TreeNode<GroupMeta>;
+    }
+  };
+
+  for (const node of nodes.values()) {
+    if (node.meta.nodeType === "token-group" && node.meta.extends) {
+      validateGroupExtension(node as TreeNode<GroupMeta>);
+    }
+  }
+
   const serializeNode = (
     node: TreeNode<TreeNodeMeta>,
     inheritedType: undefined | string,
@@ -469,11 +572,20 @@ export const serializeDesignTokens = (
       meta.type && inheritedType !== meta.type ? meta.type : undefined;
 
     if (meta.nodeType === "token-group") {
+      const extendedPath = meta.extends
+        ? nodeIdToPath.get(meta.extends.ref)
+        : undefined;
+      if (meta.extends && !extendedPath) {
+        throw Error(
+          `Group "${nodeIdToPath.get(node.nodeId) ?? node.nodeId}" extension target "${meta.extends.ref}" has no serializable path`,
+        );
+      }
       const group: Group = {
         $type: type,
         $description: meta.description,
         $deprecated: meta.deprecated,
         $extensions: meta.extensions,
+        $extends: extendedPath ? `{${extendedPath}}` : undefined,
       };
       // Add children
       const children = childrenMap.get(node.nodeId) ?? [];

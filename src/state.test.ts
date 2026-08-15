@@ -4,6 +4,7 @@ import {
   resolveTokenValue,
   resolveRawValue,
   isAliasCircular,
+  isGroupExtensionCircular,
   type TokenMeta,
   type TreeNodeMeta,
 } from "./state.svelte";
@@ -1555,6 +1556,62 @@ describe("isAliasCircular", () => {
     // Path to check: token-d -> token-e -> token-b -> token-c -> token-a (FOUND!)
     // This requires traversing 4 references to detect the cycle
     expect(isAliasCircular("token-a", "token-d", nodes)).toBe(true);
+  });
+});
+
+describe("isGroupExtensionCircular", () => {
+  test("detects when a group extension chain reaches the current group", () => {
+    const nodes = new Map<string, TreeNode<TreeNodeMeta>>([
+      [
+        "base",
+        {
+          nodeId: "base",
+          parentId: undefined,
+          index: "a0",
+          meta: { nodeType: "token-group", name: "base" },
+        },
+      ],
+      [
+        "middle",
+        {
+          nodeId: "middle",
+          parentId: undefined,
+          index: "a1",
+          meta: {
+            nodeType: "token-group",
+            name: "middle",
+            extends: { ref: "base" },
+          },
+        },
+      ],
+    ]);
+
+    expect(isGroupExtensionCircular("base", "middle", nodes)).toBe(true);
+  });
+
+  test("allows a group extension chain that does not reach the current group", () => {
+    const nodes = new Map<string, TreeNode<TreeNodeMeta>>([
+      [
+        "base",
+        {
+          nodeId: "base",
+          parentId: undefined,
+          index: "a0",
+          meta: { nodeType: "token-group", name: "base" },
+        },
+      ],
+      [
+        "other",
+        {
+          nodeId: "other",
+          parentId: undefined,
+          index: "a1",
+          meta: { nodeType: "token-group", name: "other" },
+        },
+      ],
+    ]);
+
+    expect(isGroupExtensionCircular("base", "other", nodes)).toBe(false);
   });
 });
 
