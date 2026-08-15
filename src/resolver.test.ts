@@ -665,6 +665,71 @@ describe("parseTokenResolver", () => {
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
+  test.each([
+    {
+      name: "inline modifier",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [{ type: "modifier", name: "Theme", contexts: {} }],
+      },
+      path: "resolutionOrder[0].contexts",
+    },
+    {
+      name: "root-referenced modifier",
+      document: {
+        version: "2025.10",
+        modifiers: { theme: { contexts: {} } },
+        resolutionOrder: [{ $ref: "#/modifiers/theme" }],
+      },
+      path: "modifiers.theme.contexts",
+    },
+  ])("rejects empty contexts on a $name", ({ document, path }) => {
+    const result = parseTokenResolver(document);
+
+    expect(result.nodes).toEqual([]);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain(path);
+  });
+
+  test.each([
+    {
+      name: "inline modifier",
+      document: {
+        version: "2025.10",
+        resolutionOrder: [
+          {
+            type: "modifier",
+            name: "Theme",
+            contexts: { light: [] },
+            default: "dark",
+          },
+        ],
+      },
+      path: "resolutionOrder[0].default",
+    },
+    {
+      name: "root-referenced modifier",
+      document: {
+        version: "2025.10",
+        modifiers: {
+          theme: { contexts: { light: [] }, default: "dark" },
+        },
+        resolutionOrder: [{ $ref: "#/modifiers/theme" }],
+      },
+      path: "modifiers.theme.default",
+    },
+  ])(
+    "rejects a default absent from contexts on a $name",
+    ({ document, path }) => {
+      const result = parseTokenResolver(document);
+
+      expect(result.nodes).toEqual([]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].message).toContain(path);
+      expect(result.errors[0].message).toContain("contexts");
+    },
+  );
+
   test("accepts modifier with optional default", () => {
     const result = parseTokenResolver({
       version: "2025.10",

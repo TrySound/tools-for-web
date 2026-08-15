@@ -1244,8 +1244,32 @@ describe("parseDesignTokens", () => {
           path: "/broken/$value/$ref",
           message: 'JSON Pointer target not found: "#/missing/$value"',
         },
+        {
+          path: "broken",
+          message: "✖ Invalid input",
+        },
       ]),
     );
+  });
+
+  test("reports external JSON references without mutating the input", () => {
+    const input = {
+      valid: { $type: "number", $value: 4 },
+      external: {
+        $type: "number",
+        $value: { $ref: "tokens.json#/numbers/base/$value" },
+      },
+    };
+    const original = structuredClone(input);
+
+    const result = parseDesignTokens(input);
+
+    expect(result.errors).toContainEqual({
+      path: "/external/$value/$ref",
+      message:
+        'External JSON reference is not supported: "tokens.json#/numbers/base/$value"',
+    });
+    expect(input).toEqual(original);
   });
 
   test("stores group $extends as a reference to the target group", () => {
